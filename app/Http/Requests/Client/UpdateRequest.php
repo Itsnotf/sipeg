@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Client;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateRequest extends FormRequest
 {
@@ -21,12 +22,18 @@ class UpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-         return [
-            'nama_client' => 'required|string|max:255',
-            'alamat' => 'required|string|max:255',
-            'email' => 'required|email|unique:clients,email',
-            'no_hp' => 'required|string|max:15',
-            'deskripsi' => 'nullable|string',
+        return [
+            'nama_client' => ['required', 'string', 'max:255'],
+            'alamat' => ['required', 'string', 'max:255'],
+            // Aturan unique wajib mengecualikan client yang sedang diubah.
+            // Tanpa itu, menyimpan client tanpa mengganti emailnya selalu
+            // ditolak karena emailnya sendiri dianggap sudah terpakai.
+            'email' => [
+                'required', 'email',
+                Rule::unique('clients', 'email')->ignore($this->route('client')),
+            ],
+            'no_hp' => ['required', 'string', 'max:15'],
+            'deskripsi' => ['nullable', 'string'],
         ];
     }
 }

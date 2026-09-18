@@ -2,6 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Enums\StatusKaryawan;
+use App\Enums\StatusKontrak;
 use App\Models\Cashbon;
 use App\Models\Client;
 use App\Models\Jabatan;
@@ -10,437 +12,312 @@ use App\Models\Kontrak;
 use App\Models\KontrakKaryawan;
 use App\Models\Penggajian;
 use App\Models\PenggajianDetail;
+use App\Services\CashbonService;
 use App\Services\PenggajianService;
-use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
+/**
+ * Data contoh yang melewati jalur yang sama dengan aplikasi sebenarnya.
+ *
+ * Seeder lama menulis status secara harfiah dan memanggil Eloquent langsung,
+ * sehingga menghasilkan data yang konsisten dengan dirinya sendiri tetapi tidak
+ * dengan apa yang dihasilkan antarmuka — dan itulah yang dahulu menyembunyikan
+ * bug potongan cashbon dari seluruh pengujian.
+ */
 class AppDataSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        $this->command->info('🌱 Starting comprehensive application data seeding...');
+        $jabatans = $this->buatJabatan();
+        $karyawans = $this->buatKaryawan($jabatans);
+        $clients = $this->buatClient();
+        $kontraks = $this->buatKontrak($clients, $karyawans);
 
-        // 1. Create Jabatan (Positions with salary & BPJS)
-        $this->command->info('📋 Creating Jabatan (Positions)...');
-        $jabatans = $this->createJabatans();
+        $this->prosesPenggajian($kontraks);
+        $this->buatCashbon($karyawans);
+        $this->bayarSebagianPenggajian($kontraks);
 
-        // 2. Create Karyawan (Employees)
-        $this->command->info('👥 Creating Karyawan (Employees)...');
-        $karyawans = $this->createKaryawans($jabatans);
-
-        // 3. Create Clients
-        $this->command->info('🏢 Creating Clients...');
-        $clients = $this->createClients();
-
-        // 4. Create Kontraks with Karyawans
-        $this->command->info('📄 Creating Kontraks (Contracts)...');
-        $kontraks = $this->createKontraks($clients, $karyawans);
-
-        // 5. Generate Penggajian for Kontraks
-        $this->command->info('💰 Generating Penggajian (Payroll)...');
-        $this->generatePenggajian($kontraks);
-
-        // 6. Create Cashbons
-        $this->command->info('💳 Creating Cashbons...');
-        $this->createCashbons($karyawans);
-
-        // 7. Mark some Penggajians as paid
-        $this->command->info('✅ Updating Penggajian status to dibayar...');
-        $this->markPenggajianPaid();
-
-        $this->command->info('');
-        $this->command->info('✨ Database seeding completed successfully!');
-        $this->command->info('');
-        $this->printSummary();
+        $this->cetakRingkasan();
     }
 
     /**
-     * Create Jabatan (Positions) with salary & BPJS
+     * @return array<string, Jabatan>
      */
-    private function createJabatans(): array
+    private function buatJabatan(): array
     {
-        $jabatans = [
-            [
-                'nama_jabatan' => 'Senior Developer',
-                'deskripsi' => 'Experienced software developer',
-                'gaji' => 15000000,
-                'bpjs' => 750000,
-            ],
-            [
-                'nama_jabatan' => 'Junior Developer',
-                'deskripsi' => 'Entry level software developer',
-                'gaji' => 8000000,
-                'bpjs' => 400000,
-            ],
-            [
-                'nama_jabatan' => 'UI/UX Designer',
-                'deskripsi' => 'Product designer',
-                'gaji' => 10000000,
-                'bpjs' => 500000,
-            ],
-            [
-                'nama_jabatan' => 'Project Manager',
-                'deskripsi' => 'Project management',
-                'gaji' => 12000000,
-                'bpjs' => 600000,
-            ],
-            [
-                'nama_jabatan' => 'QA Engineer',
-                'deskripsi' => 'Quality assurance engineer',
-                'gaji' => 9000000,
-                'bpjs' => 450000,
-            ],
+        $daftar = [
+            'senior' => ['Senior Developer', 15_000_000, 5.0],
+            'junior' => ['Junior Developer', 8_000_000, 5.0],
+            'desainer' => ['UI/UX Designer', 10_000_000, 5.0],
+            'manajer' => ['Project Manager', 12_000_000, 4.0],
+            'qa' => ['QA Engineer', 9_000_000, 5.0],
         ];
 
-        $created = [];
-        foreach ($jabatans as $jabatan) {
-            $created[] = Jabatan::create($jabatan);
-            $this->command->line("  ✓ Created: {$jabatan['nama_jabatan']} (Rp {$jabatan['gaji']})");
+        $hasil = [];
+
+        foreach ($daftar as $kunci => [$nama, $gaji, $persen]) {
+            $hasil[$kunci] = Jabatan::create([
+                'nama_jabatan' => $nama,
+                'deskripsi' => "Posisi {$nama}",
+                'gaji' => $gaji,
+                'bpjs' => $gaji * $persen / 100,
+                'bpjs_persen' => $persen,
+            ]);
         }
 
-        return $created;
+        return $hasil;
     }
 
     /**
-     * Create Karyawan (Employees)
+     * @param  array<string, Jabatan>  $jabatans
+     * @return array<int, Karyawan>
      */
-    private function createKaryawans(array $jabatans): array
+    private function buatKaryawan(array $jabatans): array
     {
-        $karyawans = [
-            [
-                'nama' => 'Budi Hartono',
-                'id_jabatan' => $jabatans[0]->id, // Senior Dev
-                'nik' => '12345678901234501',
-                'alamat' => 'Jl. Merdeka No. 1, Jakarta',
-                'jenis_kelamin' => 'Laki-laki',
-                'tanggal_lahir' => '1990-05-15',
-                'no_hp' => '081234567890',
-                'status' => 'aktif',
-            ],
-            [
-                'nama' => 'Siti Nurhaliza',
-                'id_jabatan' => $jabatans[1]->id, // Junior Dev
-                'nik' => '12345678901234502',
-                'alamat' => 'Jl. Sudirman No. 2, Jakarta',
-                'jenis_kelamin' => 'Perempuan',
-                'tanggal_lahir' => '1998-08-20',
-                'no_hp' => '081234567891',
-                'status' => 'aktif',
-            ],
-            [
-                'nama' => 'Adi Wijaya',
-                'id_jabatan' => $jabatans[1]->id, // Junior Dev
-                'nik' => '12345678901234503',
-                'alamat' => 'Jl. Gatot Subroto No. 3, Jakarta',
-                'jenis_kelamin' => 'Laki-laki',
-                'tanggal_lahir' => '1999-03-10',
-                'no_hp' => '081234567892',
-                'status' => 'aktif',
-            ],
-            [
-                'nama' => 'Dewi Lestari',
-                'id_jabatan' => $jabatans[2]->id, // Designer
-                'nik' => '12345678901234504',
-                'alamat' => 'Jl. Rasuna Said No. 4, Jakarta',
-                'jenis_kelamin' => 'Perempuan',
-                'tanggal_lahir' => '1995-12-25',
-                'no_hp' => '081234567893',
-                'status' => 'aktif',
-            ],
-            [
-                'nama' => 'Raka Setiawan',
-                'id_jabatan' => $jabatans[3]->id, // PM
-                'nik' => '12345678901234505',
-                'alamat' => 'Jl. Kuningan No. 5, Jakarta',
-                'jenis_kelamin' => 'Laki-laki',
-                'tanggal_lahir' => '1992-07-08',
-                'no_hp' => '081234567894',
-                'status' => 'aktif',
-            ],
-            [
-                'nama' => 'Maya Putri',
-                'id_jabatan' => $jabatans[4]->id, // QA
-                'nik' => '12345678901234506',
-                'alamat' => 'Jl. Blok M No. 6, Jakarta',
-                'jenis_kelamin' => 'Perempuan',
-                'tanggal_lahir' => '1996-11-30',
-                'no_hp' => '081234567895',
-                'status' => 'aktif',
-            ],
+        $daftar = [
+            ['Budi Hartono', 'senior', 'L'],
+            ['Siti Nurhaliza', 'desainer', 'P'],
+            ['Adi Wijaya', 'junior', 'L'],
+            ['Dewi Lestari', 'manajer', 'P'],
+            ['Raka Setiawan', 'qa', 'L'],
+            ['Maya Putri', 'junior', 'P'],
         ];
 
-        $created = [];
-        foreach ($karyawans as $karyawan) {
-            $created[] = Karyawan::create($karyawan);
-            $this->command->line("  ✓ Created: {$karyawan['nama']}");
+        $hasil = [];
+
+        foreach ($daftar as $i => [$nama, $jabatan, $kelamin]) {
+            $hasil[] = Karyawan::create([
+                'id_jabatan' => $jabatans[$jabatan]->id,
+                'nama' => $nama,
+                'nik' => '32730'.str_pad((string) ($i + 1), 11, '0', STR_PAD_LEFT),
+                'alamat' => 'Jl. Contoh No. '.($i + 1).', Bandung',
+                'jenis_kelamin' => $kelamin,
+                'tanggal_lahir' => now()->subYears(28 + $i)->format('Y-m-d'),
+                'no_hp' => '0812'.str_pad((string) (10000000 + $i), 8, '0', STR_PAD_LEFT),
+                'status' => StatusKaryawan::NonAktif,
+            ]);
         }
 
-        return $created;
+        return $hasil;
     }
 
     /**
-     * Create Clients
+     * @return array<int, Client>
      */
-    private function createClients(): array
+    private function buatClient(): array
     {
-        $clients = [
-            [
+        return [
+            Client::create([
                 'nama_client' => 'PT Digital Indonesia',
-                'alamat' => 'Jl. Merdeka No. 100, Jakarta',
-                'no_hp' => '021-1234567',
-                'email' => 'contact@digital-indonesia.com',
-                'deskripsi' => 'Digital transformation service provider',
-            ],
-            [
+                'alamat' => 'Jl. Sudirman No. 45, Jakarta',
+                'email' => 'kontak@digitalindonesia.co.id',
+                'no_hp' => '02198765432',
+                'deskripsi' => 'Perusahaan teknologi finansial',
+            ]),
+            Client::create([
                 'nama_client' => 'CV Teknologi Maju',
-                'alamat' => 'Jl. Sudirman No. 200, Jakarta',
-                'no_hp' => '021-7654321',
-                'email' => 'info@teknologi-maju.com',
-                'deskripsi' => 'Technology consulting company',
-            ],
-            [
+                'alamat' => 'Jl. Asia Afrika No. 12, Bandung',
+                'email' => 'admin@teknologimaju.co.id',
+                'no_hp' => '02287654321',
+                'deskripsi' => 'Penyedia perangkat lunak ritel',
+            ]),
+            Client::create([
                 'nama_client' => 'PT Startup Inovatif',
-                'alamat' => 'Jl. Gatot Subroto No. 300, Jakarta',
-                'no_hp' => '021-5555555',
-                'email' => 'hello@startup-inovatif.com',
-                'deskripsi' => 'Fast-growing startup company',
-            ],
+                'alamat' => 'Jl. Gatot Subroto No. 88, Jakarta',
+                'email' => 'halo@startupinovatif.id',
+                'no_hp' => '02176543210',
+                'deskripsi' => 'Rintisan bidang logistik',
+            ]),
         ];
-
-        $created = [];
-        foreach ($clients as $client) {
-            $created[] = Client::create($client);
-            $this->command->line("  ✓ Created: {$client['nama_client']}");
-        }
-
-        return $created;
     }
 
     /**
-     * Create Kontraks (Contracts) with attached Karyawans
+     * Setiap pekerja hanya ditempatkan pada satu kontrak. Penempatan ganda
+     * membuat plafon potongan yang sama diterapkan dua kali pada hutang yang
+     * sama, dan hasilnya bergantung pada urutan pemrosesan.
+     *
+     * @param  array<int, Client>  $clients
+     * @param  array<int, Karyawan>  $karyawans
+     * @return array<int, Kontrak>
      */
-    private function createKontraks(array $clients, array $karyawans): array
+    private function buatKontrak(array $clients, array $karyawans): array
     {
-        $now = Carbon::now();
-        $startMonth = $now->copy()->subMonths(1)->startOfMonth();
-        $endMonth = $now->copy()->addMonths(2)->endOfMonth();
-
-        $kontraks = [
+        $rencana = [
             [
-                'client_id' => $clients[0]->id,
-                'judul' => 'Website Revamp Project',
-                'deskripsi' => 'Complete website redesign and modernization',
-                'tanggal_mulai' => $startMonth->format('Y-m-d'),
-                'tanggal_selesai' => $startMonth->copy()->addDays(60)->format('Y-m-d'),
-                'total_biaya' => 150000000,
-                'tanggal_gajian' => 5,
-                'status' => 'aktif',
-                'karyawans' => [$karyawans[0], $karyawans[1], $karyawans[3]], // Senior Dev, Junior Dev, Designer
+                'client' => 0,
+                'judul' => 'Pengembangan Aplikasi Mobile',
+                'mulai' => now()->subMonths(5)->startOfMonth(),
+                'selesai' => now()->addMonths(4)->endOfMonth(),
+                'gajian' => 25,
+                'biaya' => 450_000_000,
+                'status' => StatusKontrak::Progres,
+                'pekerja' => [0, 1],
             ],
             [
-                'client_id' => $clients[1]->id,
-                'judul' => 'Mobile App Development',
-                'deskripsi' => 'Native mobile app for iOS and Android',
-                'tanggal_mulai' => $startMonth->copy()->addDays(15)->format('Y-m-d'),
-                'tanggal_selesai' => $startMonth->copy()->addDays(90)->format('Y-m-d'),
-                'total_biaya' => 200000000,
-                'tanggal_gajian' => 10,
-                'status' => 'aktif',
-                'karyawans' => [$karyawans[0], $karyawans[1], $karyawans[2], $karyawans[4]], // Senior Dev, 2x Junior Dev, QA
+                'client' => 1,
+                'judul' => 'Pemeliharaan Sistem Ritel',
+                'mulai' => now()->subMonths(3)->startOfMonth(),
+                'selesai' => now()->addMonths(6)->endOfMonth(),
+                'gajian' => 10,
+                'biaya' => 320_000_000,
+                'status' => StatusKontrak::Progres,
+                'pekerja' => [2, 3],
             ],
             [
-                'client_id' => $clients[2]->id,
-                'judul' => 'ERP System Implementation',
-                'deskripsi' => 'Enterprise resource planning system setup',
-                'tanggal_mulai' => $startMonth->copy()->subMonths(2)->format('Y-m-d'),
-                'tanggal_selesai' => $startMonth->copy()->addMonths(1)->format('Y-m-d'),
-                'total_biaya' => 300000000,
-                'tanggal_gajian' => 20,
-                'status' => 'selesai',
-                'karyawans' => [$karyawans[0], $karyawans[4], $karyawans[5]], // Senior Dev, QA, PM
+                'client' => 2,
+                'judul' => 'Audit Kualitas Perangkat Lunak',
+                'mulai' => now()->subMonths(6)->startOfMonth(),
+                'selesai' => now()->subMonth()->endOfMonth(),
+                'gajian' => 5,
+                'biaya' => 180_000_000,
+                'status' => StatusKontrak::Selesai,
+                'pekerja' => [4],
             ],
             [
-                'client_id' => $clients[0]->id,
-                'judul' => 'UI/UX Design Workshop',
-                'deskripsi' => 'Design thinking and UI/UX best practices',
-                'tanggal_mulai' => $now->format('Y-m-d'),
-                'tanggal_selesai' => $now->copy()->addDays(30)->format('Y-m-d'),
-                'total_biaya' => 50000000,
-                'tanggal_gajian' => 15,
-                'status' => 'aktif',
-                'karyawans' => [$karyawans[3]], // Designer
+                'client' => 0,
+                'judul' => 'Perancangan Ulang Antarmuka',
+                'mulai' => now()->addMonth()->startOfMonth(),
+                'selesai' => now()->addMonths(7)->endOfMonth(),
+                'gajian' => 20,
+                'biaya' => 260_000_000,
+                'status' => StatusKontrak::Pending,
+                'pekerja' => [5],
             ],
         ];
 
-        $created = [];
-        foreach ($kontraks as $data) {
-            $karyawansList = $data['karyawans'];
-            unset($data['karyawans']);
+        $hasil = [];
 
-            $kontrak = Kontrak::create($data);
+        foreach ($rencana as $item) {
+            $kontrak = Kontrak::create([
+                'client_id' => $clients[$item['client']]->id,
+                'judul' => $item['judul'],
+                'deskripsi' => 'Kontrak penyediaan tenaga kerja untuk '.$item['judul'],
+                'tanggal_mulai' => $item['mulai']->format('Y-m-d'),
+                'tanggal_selesai' => $item['selesai']->format('Y-m-d'),
+                'tanggal_gajian' => $item['gajian'],
+                'total_biaya' => $item['biaya'],
+                'status' => $item['status'],
+            ]);
 
-            // Attach karyawans to kontrak
-            foreach ($karyawansList as $karyawan) {
+            foreach ($item['pekerja'] as $indeks) {
                 KontrakKaryawan::create([
                     'kontrak_id' => $kontrak->id,
-                    'karyawan_id' => $karyawan->id,
+                    'karyawan_id' => $karyawans[$indeks]->id,
+                    'tanggal_mulai' => $item['mulai']->format('Y-m-d'),
+                ]);
+
+                $karyawans[$indeks]->update([
+                    'status' => $item['status'] === StatusKontrak::Selesai
+                        ? StatusKaryawan::NonAktif
+                        : StatusKaryawan::Aktif,
                 ]);
             }
 
-            $created[] = $kontrak;
-            $karyawanCount = count($karyawansList);
-            $this->command->line("  ✓ Created: {$data['judul']} ({$data['status']}) - {$karyawanCount} karyawan");
+            $hasil[] = $kontrak;
         }
 
-        return $created;
+        return $hasil;
     }
 
     /**
-     * Generate Penggajian (Payroll) for Kontraks
+     * @param  array<int, Kontrak>  $kontraks
      */
-    private function generatePenggajian(array $kontraks): void
+    private function prosesPenggajian(array $kontraks): void
     {
-        $service = new PenggajianService();
+        $service = app(PenggajianService::class);
 
         foreach ($kontraks as $kontrak) {
-            try {
-                // Load kontrak dengan relations
-                $kontrak = Kontrak::with('kontrakKaryawans.karyawan.jabatan', 'kontrakKaryawans.karyawan.cashbons')
-                    ->find($kontrak->id);
-
-                $result = $service->generate($kontrak);
-
-                if ($result['success']) {
-                    $this->command->line("  ✓ {$kontrak->judul}: {$result['created_count']} penggajian generated");
-                } else {
-                    $this->command->line("  ✗ {$kontrak->judul}: {$result['message']}");
-                }
-            } catch (\Exception $e) {
-                $this->command->line("  ✗ {$kontrak->judul}: {$e->getMessage()}");
+            // Kontrak yang belum berjalan sengaja dilewati: penggajiannya
+            // memang belum boleh ada, dan sejak ada penjagaannya di service
+            // memanggilnya di sini akan melempar exception.
+            if (! $kontrak->status->bolehDiproses()) {
+                continue;
             }
+
+            $service->proses($kontrak);
         }
     }
 
     /**
-     * Create Cashbons for Karyawans
+     * Cashbon dibuat lewat service yang sama dengan yang dipakai controller,
+     * sehingga potongannya benar-benar tercatat di buku besar.
+     *
+     * @param  array<int, Karyawan>  $karyawans
      */
-    private function createCashbons(array $karyawans): void
+    private function buatCashbon(array $karyawans): void
     {
-        $cashbons = [
-            [
-                'karyawan' => $karyawans[0], // Budi
-                'jumlah' => 3000000,
-                'keterangan' => 'Keperluan darurat',
-                'status' => 'dibayar', // Already paid
-            ],
-            [
-                'karyawan' => $karyawans[1], // Siti
-                'jumlah' => 2000000,
-                'keterangan' => 'Pinjaman pendidikan',
-                'status' => 'belum_dibayar', // Pending - will be deducted from payroll
-            ],
-            [
-                'karyawan' => $karyawans[2], // Adi
-                'jumlah' => 5000000,
-                'keterangan' => 'Cicilan rumah',
-                'status' => 'belum_dibayar', // Pending
-            ],
-            [
-                'karyawan' => $karyawans[3], // Dewi
-                'jumlah' => 1500000,
-                'keterangan' => 'Biaya kesehatan',
-                'status' => 'dibayar',
-            ],
-            [
-                'karyawan' => $karyawans[0], // Budi - second cashbon
-                'jumlah' => 2500000,
-                'keterangan' => 'Kebutuhan keluarga',
-                'status' => 'belum_dibayar', // Pending
-            ],
+        $service = app(CashbonService::class);
+
+        $daftar = [
+            [0, 6_000_000, 'Pinjaman biaya pendidikan anak'],
+            [1, 2_500_000, 'Pinjaman perbaikan kendaraan'],
+            [2, 1_500_000, 'Pinjaman keperluan keluarga'],
+            [3, 9_000_000, 'Pinjaman renovasi rumah'],
         ];
 
-        foreach ($cashbons as $data) {
-            $karyawan = $data['karyawan'];
-            $karyawan->cashbons()->create([
-                'jumlah' => $data['jumlah'],
-                'keterangan' => $data['keterangan'],
-                'status' => $data['status'],
-            ]);
-
-            $this->command->line("  ✓ Cashbon Rp {$data['jumlah']} untuk {$karyawan->nama} ({$data['status']})");
+        foreach ($daftar as [$indeks, $jumlah, $keterangan]) {
+            try {
+                $service->buat([
+                    'karyawan_id' => $karyawans[$indeks]->id,
+                    'jumlah' => $jumlah,
+                    'keterangan' => $keterangan,
+                ]);
+            } catch (\Throwable $e) {
+                $this->command?->warn("  Cashbon dilewati ({$keterangan}): {$e->getMessage()}");
+            }
         }
     }
 
     /**
-     * Mark some Penggajians as paid
+     * Membayar penggajian tertua setiap kontrak lewat service, agar alokasi
+     * cashbon ikut diselesaikan dan statusnya tersegarkan.
+     *
+     * @param  array<int, Kontrak>  $kontraks
      */
-    private function markPenggajianPaid(): void
+    private function bayarSebagianPenggajian(array $kontraks): void
     {
-        // Mark last penggajian of completed contracts as paid
-        $selesaiKontraks = Kontrak::where('status', 'selesai')->get();
+        $service = app(PenggajianService::class);
 
-        foreach ($selesaiKontraks as $kontrak) {
-            $penggajians = Penggajian::where('kontrak_id', $kontrak->id)
-                ->orderBy('periode', 'desc')
-                ->limit(1)
-                ->get();
-
-            foreach ($penggajians as $penggajian) {
-                $penggajian->update(['status' => 'dibayar']);
-                $this->command->line("  ✓ Updated: {$kontrak->judul} - Penggajian dibayar");
-            }
-        }
-
-        // Mark first penggajian of first active contract as paid
-        $firstActiveKontrak = Kontrak::where('status', 'aktif')->first();
-        if ($firstActiveKontrak) {
-            $firstPenggajian = Penggajian::where('kontrak_id', $firstActiveKontrak->id)
-                ->orderBy('periode', 'asc')
+        foreach ($kontraks as $kontrak) {
+            $penggajian = Penggajian::where('kontrak_id', $kontrak->id)
+                ->orderBy('periode')
                 ->first();
 
-            if ($firstPenggajian) {
-                $firstPenggajian->update(['status' => 'dibayar']);
-                $this->command->line("  ✓ Updated: {$firstActiveKontrak->judul} - Penggajian pertama dibayar");
+            if ($penggajian && ! $penggajian->terkunci()) {
+                $service->tandaiDibayar($penggajian);
             }
         }
     }
 
-    /**
-     * Print summary of seeded data
-     */
-    private function printSummary(): void
+    private function cetakRingkasan(): void
     {
-        $summary = [
-            'Clients' => Client::count(),
-            'Jabatan' => Jabatan::count(),
-            'Karyawan' => Karyawan::count(),
-            'Kontrak' => Kontrak::count(),
-            'KontrakKaryawan' => KontrakKaryawan::count(),
-            'Penggajian' => Penggajian::count(),
-            'Penggajian Details' => PenggajianDetail::count(),
-            'Cashbon' => Cashbon::count(),
-        ];
+        $biaya = (float) Kontrak::sum('total_biaya');
+        $gaji = (float) PenggajianDetail::sum('total_gaji');
 
-        $this->command->info('📊 Seeding Summary:');
-        $this->command->info('─────────────────────────────────────');
-        foreach ($summary as $label => $count) {
-            $this->command->line(sprintf('  %s: <fg=cyan>%d</>', $label, $count));
-        }
-        $this->command->info('─────────────────────────────────────');
+        $this->command?->newLine();
+        $this->command?->info('Ringkasan data contoh');
+        $this->command?->table(
+            ['Entitas', 'Jumlah'],
+            [
+                ['Client', Client::count()],
+                ['Jabatan', Jabatan::count()],
+                ['Karyawan', Karyawan::count()],
+                ['Kontrak', Kontrak::count()],
+                ['Penempatan', KontrakKaryawan::count()],
+                ['Penggajian', Penggajian::count()],
+                ['Detail penggajian', PenggajianDetail::count()],
+                ['Cashbon', Cashbon::count()],
+            ]
+        );
 
-        // Financial Summary
-        $totalBiaya = Kontrak::sum('total_biaya');
-        $totalPenggajian = PenggajianDetail::sum('total_gaji');
-        $totalKeuntungan = $totalBiaya - $totalPenggajian;
-
-        $this->command->info('💰 Financial Summary:');
-        $this->command->info('─────────────────────────────────────');
-        $this->command->line(sprintf('  Total Biaya Kontrak: Rp %s', number_format($totalBiaya)));
-        $this->command->line(sprintf('  Total Penggajian: Rp %s', number_format($totalPenggajian)));
-        $this->command->line(sprintf('  Keuntungan Bersih: Rp %s', number_format($totalKeuntungan)));
-        $this->command->info('─────────────────────────────────────');
+        $this->command?->line(sprintf(
+            '  Total biaya kontrak  : Rp %s', number_format($biaya, 0, ',', '.')
+        ));
+        $this->command?->line(sprintf(
+            '  Total gaji tersusun  : Rp %s', number_format($gaji, 0, ',', '.')
+        ));
+        $this->command?->line(sprintf(
+            '  Selisih              : Rp %s', number_format($biaya - $gaji, 0, ',', '.')
+        ));
     }
 }

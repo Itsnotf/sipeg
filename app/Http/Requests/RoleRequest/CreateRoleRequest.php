@@ -3,6 +3,7 @@
 namespace App\Http\Requests\RoleRequest;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CreateRoleRequest extends FormRequest
 {
@@ -22,9 +23,10 @@ class CreateRoleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            "name"=> "required|string|max:255|unique:roles,name",
-            "permissions"=> "required|array",
-            "permissions.*"=> "string|exists:permissions,name",
+            'name' => ['required', 'string', 'max:255', Rule::unique('roles', 'name')],
+            // Peran tanpa izin sah — itu peran yang belum diberi hak apa pun.
+            'permissions' => ['nullable', 'array'],
+            'permissions.*' => ['string', 'exists:permissions,name'],
         ];
     }
 }

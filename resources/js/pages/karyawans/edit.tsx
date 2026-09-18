@@ -1,201 +1,171 @@
-import { Button } from '@/components/ui/button';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, router, Form } from '@inertiajs/react';
-import { Input } from '@/components/ui/input';
-import { update } from '@/routes/karyawans';
-import { BreadcrumbItem, Jabatan, Karyawan, Role, User } from '@/types';
-import InputError from '@/components/input-error';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
+import { Form, Head } from '@inertiajs/react';
 import { useState } from 'react';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import karyawans from '@/routes/karyawans';
 
+import Field from '@/components/form/field';
+import FormActions from '@/components/form/form-actions';
+import PageHeader from '@/components/page-header';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import karyawans, { update } from '@/routes/karyawans';
+import type { BreadcrumbItem, Jabatan, Karyawan } from '@/types';
 
-interface Props {
-    jabatans: Jabatan[];
-    karyawan: Karyawan;
+interface Opsi {
+    value: string;
+    label: string;
 }
 
+interface Props {
+    karyawan: Karyawan;
+    jabatans: Jabatan[];
+    opsi: { jenis_kelamin: Opsi[] };
+}
 
+export default function KaryawanEdit({ karyawan, jabatans, opsi }: Props) {
+    useFlashToast();
 
-export default function UserEditPage({ jabatans, karyawan }: Props) {
-    const [jenisKelamin, setJenisKelamin] = useState(karyawan.jenis_kelamin);
-    const [status, setStatus] = useState(karyawan.status || '');
-    const [idJabatan, setIdJabatan] = useState(karyawan.id_jabatan.toString());
+    const [jabatan, setJabatan] = useState(String(karyawan.id_jabatan));
+    const [kelamin, setKelamin] = useState(String(karyawan.jenis_kelamin));
 
     const breadcrumbs: BreadcrumbItem[] = [
-        {
-            title: 'Karyawans',
-            href: karyawans.index().url,
-        },
-        {
-            title: 'Edit',
-            href: karyawans.edit(karyawan.id).url,
-        },
+        { title: 'Karyawan', href: karyawans.index().url },
+        { title: karyawan.nama, href: karyawans.edit(karyawan.id).url },
     ];
-
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Karyawans" />
-            <Form
-                {...update.form(karyawan.id)}
-                className="flex flex-col gap-6 p-4"
-            >
-                {({ processing, errors }) => (
-                    <>
-                        <div className="grid gap-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="nama">Nama</Label>
+            <Head title={`Ubah ${karyawan.nama}`} />
+
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Ubah karyawan"
+                    description="Mengubah jabatan akan berlaku pada periode penggajian berikutnya, bukan pada slip yang sudah tersusun"
+                />
+
+                <Form {...update.form(karyawan.id)} disableWhileProcessing className="flex max-w-xl flex-col gap-5">
+                    {({ processing, errors }) => (
+                        <>
+                            <input type="hidden" name="id_jabatan" value={jabatan} />
+                            <input type="hidden" name="jenis_kelamin" value={kelamin} />
+
+                            <Field id="nama" label="Nama lengkap" error={errors.nama}>
                                 <Input
                                     id="nama"
-                                    type="text"
+                                    name="nama"
                                     required
                                     autoFocus
+                                    autoComplete="name"
                                     defaultValue={karyawan.nama}
-                                    tabIndex={1}
-                                    autoComplete="nama"
-                                    name="nama"
-                                    placeholder="Nama Pegawai"
+                                    className="h-12 sm:h-9"
                                 />
-                                <InputError
-                                    message={errors.nama}
-                                    className="mt-2"
-                                />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="nik">Nik</Label>
+                            <Field id="nik" label="NIK" error={errors.nik} hint="16 digit sesuai KTP">
                                 <Input
                                     id="nik"
-                                    type="number"
+                                    name="nik"
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    maxLength={16}
                                     required
                                     defaultValue={karyawan.nik}
-                                    minLength={16}
-                                    tabIndex={2}
-                                    autoComplete="nik"
-                                    name="nik"
-                                    placeholder="nik"
+                                    className="num h-12 sm:h-9"
                                 />
-                                <InputError message={errors.nik} />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="alamat">Alamat</Label>
-                                <Input
-                                    id="alamat"
-                                    type="text"
-                                    required
-                                    defaultValue={karyawan.alamat}
-                                    tabIndex={2}
-                                    autoComplete="alamat"
-                                    name="alamat"
-                                    placeholder="alamat"
-                                />
-                                <InputError message={errors.alamat} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="no_hp">Kontak</Label>
-                                <Input
-                                    id="no_hp"
-                                    type="number"
-                                    required
-                                    defaultValue={karyawan.no_hp}
-                                    tabIndex={2}
-                                    autoComplete="no_hp"
-                                    name="no_hp"
-                                    placeholder="Kontak"
-                                />
-                                <InputError message={errors.no_hp} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="tanggal_lahir">Tanggal Lahir</Label>
-                                <Input
-                                    id="tanggal_lahir"
-                                    type="date"
-                                    required
-                                    defaultValue={karyawan.tanggal_lahir}
-                                    tabIndex={3}
-                                    name="tanggal_lahir"
-                                />
-                                <InputError message={errors.tanggal_lahir} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="jenis_kelamin">Jenis Kelamin</Label>
-                                <Select name="jenis_kelamin" value={jenisKelamin} onValueChange={setJenisKelamin} required>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Pilih jenis kelamin" />
+                            <Field id="id_jabatan" label="Jabatan" error={errors.id_jabatan}>
+                                <Select value={jabatan} onValueChange={setJabatan}>
+                                    <SelectTrigger id="id_jabatan" className="h-12 sm:h-9">
+                                        <SelectValue placeholder="Pilih jabatan" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="L">Laki-laki</SelectItem>
-                                        <SelectItem value="P">Perempuan</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <InputError message={errors.jenis_kelamin} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="status">Status</Label>
-                                <Select name="status" value={status} onValueChange={setStatus} required>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Pilih status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Aktif">Aktif</SelectItem>
-                                        <SelectItem value="Non Aktif">Non Aktif</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <InputError message={errors.status} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="id_jabatan">Jabatan</Label>
-                                <Select name="id_jabatan" value={idJabatan} onValueChange={setIdJabatan} required>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select a jabatan" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {jabatans.map((jabatan) => (
-                                            <SelectItem key={jabatan.id} value={jabatan.id.toString()}>
-                                                {jabatan.nama_jabatan}
+                                        {jabatans.map((j) => (
+                                            <SelectItem key={j.id} value={String(j.id)}>
+                                                {j.nama_jabatan}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <InputError message={errors.id_jabatan} />
+                            </Field>
+
+                            <div className="grid gap-5 sm:grid-cols-2">
+                                <Field id="jenis_kelamin" label="Jenis kelamin" error={errors.jenis_kelamin}>
+                                    <Select value={kelamin} onValueChange={setKelamin}>
+                                        <SelectTrigger id="jenis_kelamin" className="h-12 sm:h-9">
+                                            <SelectValue placeholder="Pilih" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {opsi.jenis_kelamin.map((o) => (
+                                                <SelectItem key={o.value} value={o.value}>
+                                                    {o.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </Field>
+
+                                <Field id="tanggal_lahir" label="Tanggal lahir" error={errors.tanggal_lahir}>
+                                    <Input
+                                        id="tanggal_lahir"
+                                        name="tanggal_lahir"
+                                        type="date"
+                                        required
+                                        autoComplete="bday"
+                                        defaultValue={karyawan.tanggal_lahir}
+                                        className="num h-12 sm:h-9"
+                                    />
+                                </Field>
                             </div>
 
-                            <div className='space-x-2'>
-                                <Button type="submit" className="mt-2 w-fit">
-                                    {processing ? (
-                                        <>
-                                            <Spinner className="mr-2" />
-                                            Saving...
-                                        </>
-                                    ) : (
-                                        'Save changes'
-                                    )}
-                                </Button>
-                                <Link href={'/users'}>
-                                    <Button variant='outline' type="button" className="mt-2 w-fit">
-                                        Back
-                                    </Button>
-                                </Link>
+                            <Field id="no_hp" label="Nomor HP" error={errors.no_hp}>
+                                <Input
+                                    id="no_hp"
+                                    name="no_hp"
+                                    type="tel"
+                                    inputMode="tel"
+                                    maxLength={15}
+                                    required
+                                    autoComplete="tel"
+                                    defaultValue={karyawan.no_hp}
+                                    className="num h-12 sm:h-9"
+                                />
+                            </Field>
+
+                            <Field id="alamat" label="Alamat" error={errors.alamat}>
+                                <Input
+                                    id="alamat"
+                                    name="alamat"
+                                    required
+                                    autoComplete="street-address"
+                                    defaultValue={karyawan.alamat}
+                                    className="h-12 sm:h-9"
+                                />
+                            </Field>
+
+                            {/*
+                                Status bukan bidang isian: nilainya diturunkan
+                                dari penempatan. Menyetelnya "Aktif" dengan
+                                tangan dahulu membuat pekerja hilang dari daftar
+                                yang tersedia untuk ditempatkan.
+                            */}
+                            <div className="border-border bg-muted/40 flex items-baseline justify-between gap-3 rounded-sm border px-3 py-2.5">
+                                <span className="text-sm font-medium">Status</span>
+                                <span className="text-muted-foreground text-sm">
+                                    {karyawan.status} · mengikuti penempatan kontrak
+                                </span>
                             </div>
-                        </div>
-                    </>
-                )}
-            </Form>
+
+                            <FormActions
+                                processing={processing}
+                                simpan="Simpan perubahan"
+                                batalKe={karyawans.index().url}
+                            />
+                        </>
+                    )}
+                </Form>
+            </div>
         </AppLayout>
     );
 }

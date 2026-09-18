@@ -1,107 +1,88 @@
-import { Button } from '@/components/ui/button';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, router, Form } from '@inertiajs/react';
-import { Input } from '@/components/ui/input';
-import kontraks from '@/routes/kontraks';
-import { BreadcrumbItem } from '@/types';
-import InputError from '@/components/input-error';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
+import { Form, Head } from '@inertiajs/react';
+import { useState } from 'react';
 
+import Field from '@/components/form/field';
+import FormActions from '@/components/form/form-actions';
+import PageHeader from '@/components/page-header';
+import { Input } from '@/components/ui/input';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import kontraks from '@/routes/kontraks';
+import dokumens, { store } from '@/routes/kontraks/dokumens';
+import type { BreadcrumbItem } from '@/types';
 
 interface Props {
-   kontrak_id: string;
+    kontrak_id: string;
 }
 
+const FORMAT = 'PDF, DOC, DOCX, JPG, atau PNG';
 
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Kontraks',
-        href: kontraks.index().url,
-    },
-    {
-        title: 'Dokumen',
-        href: '#',
-    },
-    {
-        title: 'Create',
-        href: '#',
-    },
-];
+export default function DokumenCreate({ kontrak_id }: Props) {
+    useFlashToast();
 
-export default function DokumenCreatePage({ kontrak_id }: Props) {
+    const [namaBerkas, setNamaBerkas] = useState<string | null>(null);
+
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Kontrak', href: kontraks.index().url },
+        { title: 'Dokumen', href: dokumens.index(kontrak_id).url },
+        { title: 'Unggah', href: dokumens.create(kontrak_id).url },
+    ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Dokumen Create" />
-            <Form
-                method="post"
-                action={`/kontraks/${kontrak_id}/dokumens`}
-                encType="multipart/form-data"
-                className="flex flex-col gap-6 p-4"
-            >
-                {({ processing, errors }) => (
-                    <>
-                        <div className="grid gap-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="nama_dokumen">Nama Dokumen</Label>
+            <Head title="Unggah dokumen" />
+
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Unggah dokumen"
+                    description="Berkas tersimpan melekat pada kontrak ini dan dapat diunduh kembali dari daftar dokumen"
+                />
+
+                <Form
+                    {...store.form(kontrak_id)}
+                    encType="multipart/form-data"
+                    disableWhileProcessing
+                    className="flex max-w-xl flex-col gap-5"
+                >
+                    {({ processing, errors }) => (
+                        <>
+                            <Field id="nama_dokumen" label="Nama dokumen" error={errors.nama_dokumen}>
                                 <Input
                                     id="nama_dokumen"
-                                    type="text"
+                                    name="nama_dokumen"
                                     required
                                     autoFocus
-                                    tabIndex={1}
-                                    autoComplete="nama_dokumen"
-                                    name="nama_dokumen"
-                                    placeholder="Nama Dokumen"
+                                    placeholder="Surat perjanjian kerja sama"
+                                    className="h-12 sm:h-9"
                                 />
-                                <InputError
-                                    message={errors.nama_dokumen}
-                                    className="mt-2"
-                                />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="file">File</Label>
+                            <Field
+                                id="file"
+                                label="Berkas"
+                                error={errors.file}
+                                hint={namaBerkas ? `Dipilih: ${namaBerkas}` : `Format ${FORMAT}, maksimal 2 MB.`}
+                            >
                                 <Input
                                     id="file"
+                                    name="file"
                                     type="file"
                                     required
-                                    tabIndex={2}
-                                    name="file"
-                                    accept=".pdf,.doc,.docx,.jpg,.png"
+                                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                    onChange={(e) => setNamaBerkas(e.target.files?.[0]?.name ?? null)}
+                                    className="h-12 file:mr-3 file:text-sm sm:h-9"
                                 />
-                                <InputError
-                                    message={errors.file}
-                                    className="mt-2"
-                                />
-                                <p className="text-sm text-gray-500">Format: PDF, DOC, DOCX, JPG, PNG</p>
-                            </div>
+                            </Field>
 
-                            <div className='space-x-2'>
-                                <Button type="submit" className="mt-2 w-fit">
-                                    {processing ? (
-                                        <>
-                                            <Spinner className="mr-2" />    
-                                            Uploading...
-                                        </>
-                                    ) : (
-                                        'Upload Dokumen'
-                                    )}
-                                </Button>
-                                <Button 
-                                    variant='outline' 
-                                    type="button" 
-                                    className="mt-2 w-fit"
-                                    onClick={() => window.history.back()}
-                                >
-                                    Back
-                                </Button>
-                            </div>
-                        </div>
-                    </>
-                )}
-            </Form>
+                            <FormActions
+                                processing={processing}
+                                simpan="Unggah dokumen"
+                                batalKe={dokumens.index(kontrak_id).url}
+                            />
+                        </>
+                    )}
+                </Form>
+            </div>
         </AppLayout>
     );
 }

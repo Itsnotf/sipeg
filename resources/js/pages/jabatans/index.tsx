@@ -1,166 +1,151 @@
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, router, usePage } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
-import DeleteButton from '@/components/delete-button';
-import { Edit2Icon, PlusCircle } from 'lucide-react';
-import { BreadcrumbItem, Jabatan, SharedData, User } from '@/types';
-import { toast } from 'sonner';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip"
-import hasAnyPermission from '@/lib/utils';
-import jabatans from '@/routes/jabatans';
+import { Head, Link, router } from '@inertiajs/react';
+import { BookOpen, PlusCircle, Search, SquarePen } from 'lucide-react';
+import { useState } from 'react';
 
+import DataList, { type DataColumn } from '@/components/data-list';
+import DeleteButton from '@/components/delete-button';
+import EmptyState from '@/components/empty-state';
+import PageHeader from '@/components/page-header';
+import Pagination, { type Paginated } from '@/components/pagination';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import hasAnyPermission, { angka, rupiah } from '@/lib/utils';
+import jabatans from '@/routes/jabatans';
+import type { BreadcrumbItem, Jabatan } from '@/types';
 
 interface Props {
-    jabatans: {
-        data: Jabatan[];
-        links: any[];
-    };
-    filters: {
-        search?: string;
-    };
-    flash?: {
-        success?: string;
-    };
+    jabatans: Paginated<Jabatan>;
+    filters: { search?: string };
 }
 
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Jabatan', href: jabatans.index().url }];
 
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Jabatan',
-        href: jabatans.index.url(),
-    },
-];
+export default function JabatanIndex({ jabatans: list, filters }: Props) {
+    useFlashToast();
+    const [search, setSearch] = useState(filters.search ?? '');
 
-export default function JabatanPage({ jabatans, filters, flash }: Props) {
-    const user = usePage<SharedData>().props.auth.user;
 
-    const [search, setSearch] = useState(filters.search || '');
-    const [shownMessages] = useState(new Set());
-
-    useEffect(() => {
-        if (flash?.success && !shownMessages.has(flash.success)) {
-            toast.success(flash.success);
-            shownMessages.add(flash.success);
-        }
-    }, [flash?.success]);
-
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        router.get('/jabatans', { search }, { preserveState: true });
-    };
+    const columns: DataColumn<Jabatan>[] = [
+        {
+            key: 'nama',
+            header: 'Jabatan',
+            primary: true,
+            cell: (row) => <span className="font-semibold">{row.nama_jabatan}</span>,
+        },
+        {
+            key: 'deskripsi',
+            header: 'Deskripsi',
+            hideOnCard: true,
+            cell: (row) => (
+                <span className="text-muted-foreground line-clamp-1 text-[13px]" title={row.deskripsi}>
+                    {row.deskripsi}
+                </span>
+            ),
+        },
+        {
+            key: 'gaji',
+            header: 'Gaji pokok',
+            className: 'text-right',
+            width: 'w-44',
+            cell: (row) => <span className="num text-sm">{rupiah(row.gaji)}</span>,
+        },
+        {
+            key: 'bpjs',
+            header: 'BPJS',
+            className: 'text-right',
+            width: 'w-48',
+            cell: (row) => (
+                <div className="flex flex-col gap-0.5 sm:items-end">
+                    <span className="num text-sm">{angka(row.bpjs_persen)}%</span>
+                    <span className="num text-muted-foreground/80 text-[11px]">
+                        {rupiah((Number(row.gaji) * Number(row.bpjs_persen)) / 100)}
+                    </span>
+                </div>
+            ),
+        },
+    ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Jabatan" />
 
-            <div className="p-4 space-y-4">
-
-                {/* Search Bar */}
-                <div className='flex space-x-1'>
-                    <form onSubmit={handleSearch} className="flex gap-2 w-full md:w-1/3">
-                        <Input
-                            placeholder="Search jabatans..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                        <Button variant='outline' type="submit">Search</Button>
-                    </form>
-                    {hasAnyPermission(["jabatans create"]) && (
-                        <Link href="/jabatans/create">
-                            <Button variant='default' className='group flex items-center'>
-                                <PlusCircle className='group-hover:rotate-90 transition-all' />
-                                Add Jabatans
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Jabatan"
+                    description="Gaji pokok dan tarif BPJS yang menjadi dasar perhitungan penggajian"
+                    actions={
+                        hasAnyPermission(['jabatans create']) ? (
+                            <Button asChild className="h-11 w-full sm:h-9 sm:w-auto">
+                                <Link href={jabatans.create()}>
+                                    <PlusCircle />
+                                    Tambah jabatan
+                                </Link>
                             </Button>
-                        </Link>
-                    )}
-                </div>
+                        ) : null
+                    }
+                />
 
-                {/* User Table */}
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Nama Jabatan</TableHead>
-                            <TableHead>Deskripsi</TableHead>
-                            <TableHead>Gaji</TableHead>
-                            <TableHead>BPJS</TableHead>
-                            <TableHead>Action</TableHead>
-                        </TableRow>
-                    </TableHeader>
-
-                    <TableBody>
-                        {jabatans.data.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={8} className="h-[65vh]  text-center">
-                                    Belum Ada Data Jabatan.
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            jabatans.data.map((jabatan) => (
-                                <TableRow key={jabatan.id}>
-                                    <TableCell>{jabatan.nama_jabatan}</TableCell>
-                                    <TableCell>{jabatan.deskripsi}</TableCell>
-                                    <TableCell>
-                                        {new Intl.NumberFormat('id-ID', {
-                                            style: 'currency',
-                                            currency: 'IDR',
-                                            minimumFractionDigits: 0,
-                                        }).format(Number(jabatan.gaji ?? 0))}
-                                    </TableCell>
-                                    <TableCell>
-                                        {new Intl.NumberFormat('id-ID', {
-                                            style: 'currency',
-                                            currency: 'IDR',
-                                            minimumFractionDigits: 0,
-                                        }).format(Number(jabatan.bpjs ?? 0))}
-                                    </TableCell>
-                                    <TableCell className="space-x-2">
-                                        {hasAnyPermission(["jabatans edit"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <Link href={`/jabatans/${jabatan.id}/edit`}>
-                                                        <Button variant="outline" size="sm" className='hover:bg-blue-200 hover:text-blue-600'> <Edit2Icon /></Button>
-                                                    </Link>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Edit
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-
-                                        {hasAnyPermission(["jabatans delete"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <DeleteButton id={jabatan.id} featured='jabatans' />
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Delete
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            )))}
-                    </TableBody>
-                </Table>
-
-                <div className="flex gap-1">
-                    {jabatans.links.map((link, i) => (
-                        <Link
-                            key={i}
-                            href={link.url ?? '#'}
-                            className={`px-3 py-1 flex justify-center items-center border rounded-md ${link.active ? 'bg-black text-white text-sm' : 'text-sm'}`}
-                            dangerouslySetInnerHTML={{ __html: link.label }}
+                <form
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        router.get(jabatans.index().url, { search }, { preserveState: true, replace: true });
+                    }}
+                    className="flex gap-2 sm:max-w-md"
+                >
+                    <div className="relative flex-1">
+                        <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                        <Input
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder="Cari nama jabatan"
+                            className="h-11 pl-9 sm:h-9"
                         />
-                    ))}
-                </div>
+                    </div>
+                    <Button type="submit" variant="outline" className="h-11 sm:h-9">
+                        Cari
+                    </Button>
+                </form>
 
+                <DataList
+                    columns={columns}
+                    rows={list.data}
+                    rowKey={(row) => row.id}
+                    actions={(row) => (
+                        <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+                            {hasAnyPermission(['jabatans edit']) && (
+                                <Button asChild variant="outline" size="sm" className="h-11 flex-1 sm:h-8 sm:flex-none">
+                                    <Link href={jabatans.edit(row.id)}>
+                                        <SquarePen />
+                                        Ubah
+                                    </Link>
+                                </Button>
+                            )}
+                            {hasAnyPermission(['jabatans delete']) && <DeleteButton id={row.id} featured="jabatans" />}
+                        </div>
+                    )}
+                    empty={
+                        <EmptyState
+                            icon={BookOpen}
+                            title={filters.search ? 'Tidak ada jabatan yang cocok' : 'Belum ada jabatan'}
+                            description={
+                                filters.search
+                                    ? 'Coba kata kunci lain, atau kosongkan pencarian untuk melihat semuanya.'
+                                    : 'Jabatan menentukan gaji pokok dan tarif BPJS setiap pekerja.'
+                            }
+                            action={
+                                !filters.search && hasAnyPermission(['jabatans create']) ? (
+                                    <Button asChild>
+                                        <Link href={jabatans.create()}>Tambah jabatan pertama</Link>
+                                    </Button>
+                                ) : null
+                            }
+                        />
+                    }
+                />
+
+                <Pagination meta={list} noun="jabatan" />
             </div>
         </AppLayout>
     );

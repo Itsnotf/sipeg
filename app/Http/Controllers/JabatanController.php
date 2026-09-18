@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Jabatan\StoreRequest;
 use App\Http\Requests\Jabatan\UpdateRequest;
 use App\Models\Jabatan;
+use App\Models\Karyawan;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
@@ -17,10 +18,11 @@ class JabatanController extends Controller implements HasMiddleware
         return [
             new Middleware('permission:jabatans index', only: ['index']),
             new Middleware('permission:jabatans create', only: ['create', 'store']),
-            new Middleware('permission:jabatans edit', only: ['edit', 'update   ']),
+            new Middleware('permission:jabatans edit', only: ['edit', 'update']),
             new Middleware('permission:jabatans delete', only: ['destroy']),
         ];
     }
+
     /**
      * Display a listing of the resource.
      */
@@ -36,9 +38,6 @@ class JabatanController extends Controller implements HasMiddleware
         return inertia('jabatans/index', [
             'jabatans' => $Jabatans,
             'filters' => $request->only('search'),
-            'flash' => [
-                'success' => session('success'),
-            ],
         ]);
     }
 
@@ -57,15 +56,7 @@ class JabatanController extends Controller implements HasMiddleware
     {
         Jabatan::create($request->validated());
 
-        return redirect()->route("jabatans.index")->with("success", "Jabatan created successfully");
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(Jabatan $jabatan)
-    {
-        //
+        return redirect()->route('jabatans.index')->with('success', 'Jabatan berhasil ditambahkan.');
     }
 
     /**
@@ -76,7 +67,7 @@ class JabatanController extends Controller implements HasMiddleware
         $jabatan = Jabatan::findOrFail($id);
 
         return Inertia::render('jabatans/edit', [
-            'jabatan' => $jabatan
+            'jabatan' => $jabatan,
         ]);
     }
 
@@ -89,7 +80,7 @@ class JabatanController extends Controller implements HasMiddleware
 
         $jabatan->update($request->validated());
 
-        return redirect()->route("jabatans.index")->with("success", "Jabatan updated successfully");
+        return redirect()->route('jabatans.index')->with('success', 'Jabatan berhasil diperbarui.');
     }
 
     /**
@@ -99,8 +90,26 @@ class JabatanController extends Controller implements HasMiddleware
     {
         $jabatan = Jabatan::findOrFail($id);
 
+        /*
+        | Kunci pengaman, bukan sekadar kenyamanan.
+        |
+        | karyawans.id_jabatan memakai cascade, sehingga menghapus jabatan akan
+        | ikut menghapus seluruh karyawannya — dan berantai ke detail
+        | penggajian serta cashbon mereka. Riwayat gaji yang sudah dibayarkan
+        | lenyap tanpa satu pun peringatan; kalaupun buku besar potongan
+        | menahannya, yang muncul hanyalah galat SQL.
+        */
+        $jumlahKaryawan = Karyawan::where('id_jabatan', $jabatan->id)->count();
+
+        if ($jumlahKaryawan > 0) {
+            return redirect()->route('jabatans.index')->with(
+                'error',
+                "Jabatan ini masih dipakai {$jumlahKaryawan} karyawan. Pindahkan mereka ke jabatan lain lebih dahulu."
+            );
+        }
+
         $jabatan->delete();
 
-        return redirect()->route("jabatans.index")->with("success", "Jabatan deleted successfully");
+        return redirect()->route('jabatans.index')->with('success', 'Jabatan berhasil dihapus.');
     }
 }

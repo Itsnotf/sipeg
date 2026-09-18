@@ -23,7 +23,7 @@ class StoreRequest extends FormRequest
     {
         return [
             'nama_dokumen' => 'required|string|max:255',
-            'file' => 'required|file|mimes:pdf,doc,docx,jpg,png',
+            'file' => ['required', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:2048'],
         ];
     }
 }

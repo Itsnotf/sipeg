@@ -1,160 +1,117 @@
-import { Button } from '@/components/ui/button';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, Form } from '@inertiajs/react';
-import { Input } from '@/components/ui/input';
-import { store } from '@/routes/cashbons';
-import { BreadcrumbItem, Karyawan } from '@/types';
-
-import InputError from '@/components/input-error';
-
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import cashbons from '@/routes/cashbons';
+import { Form, Head } from '@inertiajs/react';
 import { useState } from 'react';
-import { toast } from 'sonner';
-import { useEffect } from 'react';
-import { usePage } from '@inertiajs/react';
-import type { SharedData } from '@/types';
 
+import Field from '@/components/form/field';
+import FormActions from '@/components/form/form-actions';
+import PageHeader from '@/components/page-header';
+import PlafonMeter, { type KaryawanPlafon } from '@/components/plafon-meter';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import { rupiah } from '@/lib/utils';
+import cashbons, { store } from '@/routes/cashbons';
+import type { BreadcrumbItem } from '@/types';
 
 interface Props {
-    karyawans: Karyawan[];
+    karyawans: KaryawanPlafon[];
+    kebijakan: { maks_hutang_bulan: number; batas_potongan: number };
 }
 
-
 const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Cashbon',
-        href: cashbons.index.url(),
-    },
-    {
-        title: 'Create',
-        href: cashbons.create.url(),
-    },
+    { title: 'Cashbon', href: cashbons.index().url },
+    { title: 'Buat', href: cashbons.create().url },
 ];
 
-export default function CashbonCreatePage({ karyawans }: Props) {
-    const [karyawanId, setKaryawanId] = useState<string>('');
-    const [status, setStatus] = useState<string>('belum dibayar');
-    const flash = usePage<SharedData>().props.flash;
-    const [shownMessages] = useState(new Set());
+export default function CashbonCreate({ karyawans, kebijakan }: Props) {
+    useFlashToast();
+    const [karyawanId, setKaryawanId] = useState('');
+    const [jumlah, setJumlah] = useState('');
 
-    useEffect(() => {
-        if (flash?.success && !shownMessages.has(flash.success)) {
-            toast.success(flash.success);
-            shownMessages.add(flash.success);
-        }
 
-        if (flash?.error && !shownMessages.has(flash.error)) {
-            toast.error(flash.error);
-            shownMessages.add(flash.error);
-        }
-    }, [flash?.success, flash?.error]);
+    const terpilih = karyawans.find((karyawan) => String(karyawan.id) === karyawanId);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Cashbon Create" />
-            <Form
-                {...store.form()}
-                disableWhileProcessing
-                className="flex flex-col gap-6 p-4"
-            >
-                {({ processing, errors }) => (
-                    <>
-                        <div className="grid gap-6">
-                            <input type="hidden" name="karyawan_id" value={karyawanId} />
-                            <input type="hidden" name="status" value={status} />
+            <Head title="Buat cashbon" />
 
-                            <div className="grid gap-2">
-                                <Label>Karyawan</Label>
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Buat cashbon"
+                    description="Pinjaman akan terpotong otomatis dari gaji secara mencicil"
+                />
+
+                <Form {...store.form()} disableWhileProcessing className="flex max-w-xl flex-col gap-5">
+                    {({ processing, errors }) => (
+                        <>
+                            <input type="hidden" name="karyawan_id" value={karyawanId} />
+
+                            <Field id="karyawan" label="Karyawan" error={errors.karyawan_id}>
                                 <Select value={karyawanId} onValueChange={setKaryawanId}>
-                                    <SelectTrigger>
+                                    <SelectTrigger id="karyawan" className="h-12 sm:h-9">
                                         <SelectValue placeholder="Pilih karyawan" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {karyawans.map((karyawan) => (
                                             <SelectItem key={karyawan.id} value={String(karyawan.id)}>
-                                                {karyawan.nama} - {karyawan.jabatan?.nama_jabatan}
+                                                {karyawan.nama} — {karyawan.jabatan.nama_jabatan}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <InputError message={errors.karyawan_id} />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="jumlah">Jumlah</Label>
+                            {terpilih ? (
+                                <PlafonMeter
+                                    karyawan={terpilih}
+                                    jumlah={Number(jumlah) || 0}
+                                    maksHutangBulan={kebijakan.maks_hutang_bulan}
+                                />
+                            ) : (
+                                <p className="text-muted-foreground bg-muted/50 rounded-lg border border-dashed p-4 text-sm">
+                                    Pilih karyawan untuk melihat sisa plafon pinjamannya.
+                                </p>
+                            )}
+
+                            <Field
+                                id="jumlah"
+                                label="Jumlah pinjaman"
+                                error={errors.jumlah}
+                                hint={jumlah ? rupiah(jumlah) : undefined}
+                            >
                                 <Input
                                     id="jumlah"
-                                    type="number"
-                                    required
-                                    autoFocus
-                                    tabIndex={1}
-                                    autoComplete="jumlah"
                                     name="jumlah"
-                                    placeholder="Jumlah"
+                                    type="number"
+                                    min={1}
+                                    required
+                                    value={jumlah}
+                                    onChange={(event) => setJumlah(event.target.value)}
+                                    placeholder="0"
+                                    className="num h-12 sm:h-9"
                                 />
-                                <InputError message={errors.jumlah} className="mt-2" />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="keterangan">Keterangan</Label>
+                            <Field id="keterangan" label="Keterangan" error={errors.keterangan}>
                                 <Input
                                     id="keterangan"
+                                    name="keterangan"
                                     type="text"
                                     required
-                                    tabIndex={2}
-                                    autoComplete="keterangan"
-                                    name="keterangan"
-                                    placeholder="Keterangan"
+                                    placeholder="Mis. pinjaman biaya sekolah"
+                                    className="h-12 sm:h-9"
                                 />
-                                <InputError message={errors.keterangan} />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label>Status</Label>
-                                <Select value={status} onValueChange={setStatus}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Pilih status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="belum dibayar">Belum dibayar</SelectItem>
-                                        <SelectItem value="dibayar">Dibayar</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <InputError message={errors.status} />
-                            </div>
-
-                         
-                          
-                            <div className='space-x-2'>
-                                <Button type="submit" className="mt-2 w-fit">
-                                    {processing ? (
-                                        <>
-                                            <Spinner className="mr-2" />    
-                                            Creating...
-                                        </>
-                                    ) : (
-                                        'Create Cashbon'
-                                    )}
-                                </Button>
-                                <Link href={'/cashbons'}>
-                                    <Button variant='outline' type="button" className="mt-2 w-fit">
-                                        Back
-                                    </Button>
-                                </Link>
-                            </div>
-                        </div>
-                    </>
-                )}
-            </Form>
+                            <FormActions
+                                processing={processing}
+                                simpan="Simpan cashbon"
+                                batalKe={cashbons.index().url}
+                            />
+                        </>
+                    )}
+                </Form>
+            </div>
         </AppLayout>
     );
 }

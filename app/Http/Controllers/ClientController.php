@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Client\StoreRequest;
 use App\Http\Requests\Client\UpdateRequest;
 use App\Models\Client;
+use App\Models\Kontrak;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
@@ -12,21 +13,20 @@ use Inertia\Inertia;
 
 class ClientController extends Controller implements HasMiddleware
 {
-     public static function middleware()
+    public static function middleware()
     {
         return [
             new Middleware('permission:clients index', only: ['index']),
             new Middleware('permission:clients create', only: ['create', 'store']),
-            new Middleware('permission:clients edit', only: ['edit', 'update   ']),
+            new Middleware('permission:clients edit', only: ['edit', 'update']),
             new Middleware('permission:clients delete', only: ['destroy']),
         ];
     }
 
-
     /**
      * Display a listing of the resource.
      */
-     public function index(Request $request)
+    public function index(Request $request)
     {
         $clients = Client::when($request->search, function ($query, $search) {
             $query->where('nama_client', 'like', "%{$search}%")
@@ -38,9 +38,6 @@ class ClientController extends Controller implements HasMiddleware
         return inertia('clients/index', [
             'clients' => $clients,
             'filters' => $request->only('search'),
-            'flash' => [
-                'success' => session('success'),
-            ],
         ]);
     }
 
@@ -59,15 +56,7 @@ class ClientController extends Controller implements HasMiddleware
     {
         Client::create($request->validated());
 
-        return redirect()->route('clients.index')->with('success', 'Client created successfully.');
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(Client $client)
-    {
-        //
+        return redirect()->route('clients.index')->with('success', 'Client berhasil ditambahkan.');
     }
 
     /**
@@ -76,6 +65,7 @@ class ClientController extends Controller implements HasMiddleware
     public function edit(string $id)
     {
         $client = Client::findOrFail($id);
+
         return Inertia::render('clients/edit', [
             'client' => $client,
         ]);
@@ -89,7 +79,7 @@ class ClientController extends Controller implements HasMiddleware
         $client = Client::findOrFail($id);
         $client->update($request->validated());
 
-        return redirect()->route('clients.index')->with('success', 'Client updated successfully.');
+        return redirect()->route('clients.index')->with('success', 'Client berhasil diperbarui.');
     }
 
     /**
@@ -98,8 +88,25 @@ class ClientController extends Controller implements HasMiddleware
     public function destroy(string $id)
     {
         $client = Client::findOrFail($id);
+
+        /*
+        | kontraks.client_id memakai cascade: menghapus client akan menyeret
+        | seluruh kontraknya, beserta penempatan dan penggajian di bawahnya —
+        | termasuk yang sudah dibayar. Penjagaan "kontrak dengan penggajian
+        | terbayar tidak boleh dihapus" di KontrakController tidak pernah
+        | terlewati, karena penghapusannya terjadi di tingkat basis data.
+        */
+        $jumlahKontrak = Kontrak::where('client_id', $client->id)->count();
+
+        if ($jumlahKontrak > 0) {
+            return redirect()->route('clients.index')->with(
+                'error',
+                "Client ini masih memiliki {$jumlahKontrak} kontrak. Hapus atau pindahkan kontraknya lebih dahulu."
+            );
+        }
+
         $client->delete();
 
-        return redirect()->route('clients.index')->with('success', 'Client deleted successfully.');
+        return redirect()->route('clients.index')->with('success', 'Client berhasil dihapus.');
     }
 }

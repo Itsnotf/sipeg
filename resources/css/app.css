@@ -7,15 +7,29 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+| Sistem desain "Buku Besar"
+|
+| Diambil dari kertas buku besar akuntansi: kertas hangat, garis rambut,
+| baris berbelang, dan angka monospace bertabular. Dipilih karena menegaskan
+| nilai utama mesin penggajian — setiap rupiah bisa ditelusuri asalnya.
+*/
+
 @theme {
     --font-sans:
-        'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
+        'Source Sans 3', ui-sans-serif, system-ui, sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
         'Noto Color Emoji';
 
+    --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+    /* Buku besar itu tegas, bukan empuk — 4px di mana pun, 3px untuk lencana */
+    --radius-xl: var(--radius);
     --radius-lg: var(--radius);
-    --radius-md: calc(var(--radius) - 2px);
-    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: var(--radius);
+    --radius-sm: calc(var(--radius) - 1px);
 
     --color-background: var(--background);
     --color-foreground: var(--foreground);
@@ -45,11 +59,17 @@
     --color-input: var(--input);
     --color-ring: var(--ring);
 
+    /* Seri grafik — kategorikal, urutan tetap, tidak pernah diputar ulang */
     --color-chart-1: var(--chart-1);
     --color-chart-2: var(--chart-2);
     --color-chart-3: var(--chart-3);
     --color-chart-4: var(--chart-4);
     --color-chart-5: var(--chart-5);
+
+    /* Warna status — khusus, tidak pernah dipakai sebagai warna seri */
+    --color-ok: var(--ok);
+    --color-warn: var(--warn);
+    --color-crit: var(--crit);
 
     --color-sidebar: var(--sidebar);
     --color-sidebar-foreground: var(--sidebar-foreground);
@@ -62,74 +82,99 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.87 0 0);
-    --chart-1: oklch(0.646 0.222 41.116);
-    --chart-2: oklch(0.6 0.118 184.704);
-    --chart-3: oklch(0.398 0.07 227.392);
-    --chart-4: oklch(0.828 0.189 84.429);
-    --chart-5: oklch(0.769 0.188 70.08);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.87 0 0);
+    --background: oklch(0.98 0.006 95);
+    --foreground: oklch(0.19 0.01 95);
+    --card: oklch(1 0.002 95);
+    --card-foreground: oklch(0.19 0.01 95);
+    --popover: oklch(1 0.002 95);
+    --popover-foreground: oklch(0.19 0.01 95);
+    --primary: oklch(0.42 0.09 165);
+    --primary-foreground: oklch(0.985 0.01 165);
+    --secondary: oklch(0.955 0.01 95);
+    --secondary-foreground: oklch(0.19 0.01 95);
+    --muted: oklch(0.955 0.01 95);
+    --muted-foreground: oklch(0.47 0.012 95);
+    --accent: oklch(0.94 0.012 95);
+    --accent-foreground: oklch(0.19 0.01 95);
+    --destructive: oklch(0.52 0.16 28);
+    --destructive-foreground: oklch(0.52 0.16 28);
+    --border: oklch(0.9 0.008 95);
+    --input: oklch(0.9 0.008 95);
+    --ring: oklch(0.42 0.09 165);
+
+    /*
+    | Seri grafik. Urutan rona sengaja tidak berurut semantik (hijau, biru,
+    | amber, ungu, merah) — urutan inilah yang lolos pemeriksaan keterbedaan
+    | bagi penglihatan warna terbatas. Menukar urutannya akan membuat pasangan
+    | ungu-biru bersebelahan, yang runtuh menjadi satu warna bagi deuteranopia.
+    */
+    --chart-1: oklch(0.5 0.14 152);
+    --chart-2: oklch(0.52 0.15 248);
+    --chart-3: oklch(0.64 0.15 68);
+    --chart-4: oklch(0.47 0.18 312);
+    --chart-5: oklch(0.52 0.19 22);
+
+    /* Status — dipisahkan dari seri grafik dan tidak boleh dipakai bergantian */
+    --ok: oklch(0.45 0.1 158);
+    --warn: oklch(0.52 0.11 75);
+    --crit: oklch(0.52 0.14 28);
+
+    --radius: 0.25rem;
+
+    --sidebar: oklch(0.955 0.01 95);
+    --sidebar-foreground: oklch(0.19 0.01 95);
+    --sidebar-primary: oklch(0.42 0.09 165);
+    --sidebar-primary-foreground: oklch(0.985 0.01 165);
+    --sidebar-accent: oklch(1 0.002 95);
+    --sidebar-accent-foreground: oklch(0.19 0.01 95);
+    --sidebar-border: oklch(0.9 0.008 95);
+    --sidebar-ring: oklch(0.42 0.09 165);
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.396 0.141 25.723);
-    --destructive-foreground: oklch(0.637 0.237 25.331);
-    --border: oklch(0.269 0 0);
-    --input: oklch(0.269 0 0);
-    --ring: oklch(0.439 0 0);
-    --chart-1: oklch(0.488 0.243 264.376);
-    --chart-2: oklch(0.696 0.17 162.48);
-    --chart-3: oklch(0.769 0.188 70.08);
-    --chart-4: oklch(0.627 0.265 303.9);
-    --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.985 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.269 0 0);
-    --sidebar-ring: oklch(0.439 0 0);
+    --background: oklch(0.17 0.008 150);
+    --foreground: oklch(0.93 0.008 95);
+    --card: oklch(0.21 0.008 150);
+    --card-foreground: oklch(0.93 0.008 95);
+    --popover: oklch(0.21 0.008 150);
+    --popover-foreground: oklch(0.93 0.008 95);
+    --primary: oklch(0.72 0.11 165);
+    --primary-foreground: oklch(0.17 0.008 150);
+    --secondary: oklch(0.25 0.01 150);
+    --secondary-foreground: oklch(0.93 0.008 95);
+    --muted: oklch(0.25 0.01 150);
+    --muted-foreground: oklch(0.66 0.01 95);
+    --accent: oklch(0.27 0.01 150);
+    --accent-foreground: oklch(0.93 0.008 95);
+    --destructive: oklch(0.68 0.14 28);
+    --destructive-foreground: oklch(0.68 0.14 28);
+    --border: oklch(0.31 0.01 150);
+    --input: oklch(0.31 0.01 150);
+    --ring: oklch(0.72 0.11 165);
+
+    /*
+    | Pita kelaranan tema gelap justru LEBIH GELAP daripada tema terang
+    | (L 0.48–0.67): warna pekat pertengahan terbaca di permukaan gelap,
+    | sementara pastel terang menyilaukan dan kehilangan bentuknya.
+    */
+    --chart-1: oklch(0.63 0.15 152);
+    --chart-2: oklch(0.6 0.15 248);
+    --chart-3: oklch(0.66 0.15 68);
+    --chart-4: oklch(0.57 0.18 312);
+    --chart-5: oklch(0.58 0.18 22);
+
+    --ok: oklch(0.7 0.12 158);
+    --warn: oklch(0.78 0.12 75);
+    --crit: oklch(0.7 0.14 28);
+
+    --sidebar: oklch(0.2 0.008 150);
+    --sidebar-foreground: oklch(0.93 0.008 95);
+    --sidebar-primary: oklch(0.72 0.11 165);
+    --sidebar-primary-foreground: oklch(0.17 0.008 150);
+    --sidebar-accent: oklch(0.26 0.01 150);
+    --sidebar-accent-foreground: oklch(0.93 0.008 95);
+    --sidebar-border: oklch(0.31 0.01 150);
+    --sidebar-ring: oklch(0.72 0.11 165);
 }
 
 @layer base {
@@ -140,11 +185,40 @@
     body {
         @apply bg-background text-foreground;
     }
+
+    /* Judul memakai serif — wibawa dokumen, bukan dasbor generik */
+    h1, h2, h3 {
+        @apply font-serif;
+        text-wrap: balance;
+    }
 }
 
-.table-row-flex {
-    @apply flex justify-between w-full;
+@layer components {
+    /*
+    | Angka selalu monospace bertabular: kolom rupiah berbaris lurus dan mata
+    | bisa membandingkan besaran tanpa membaca tiap digit.
+    */
+    .num {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Label huruf besar di atas sebuah nilai */
+    .eyebrow {
+        @apply text-muted-foreground text-[11px] font-semibold tracking-[0.1em] uppercase;
+    }
 }
-.table-cell-flex {
-    @apply flex-1;
+
+/*
+| Kendali kata sandi bawaan peramban dimatikan.
+|
+| Edge menggambar tombol "mata" sendiri lewat ::-ms-reveal, tetapi hanya selama
+| kolomnya berisi DAN sedang difokuskan — begitu fokus berpindah tombolnya
+| lenyap, dan pengguna melihatnya sebagai tombol yang hilang sendiri. Sakelar
+| milik aplikasi ada di components/form/password-input.tsx; dua tombol di satu
+| kolom hanya akan saling menimpa.
+*/
+input::-ms-reveal,
+input::-ms-clear {
+    display: none;
 }

@@ -1,141 +1,105 @@
-import { Button } from '@/components/ui/button';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, router, Form } from '@inertiajs/react';
-import { Input } from '@/components/ui/input';
-import { update } from '@/routes/clients';
-import { BreadcrumbItem, Client } from '@/types';
-import InputError from '@/components/input-error';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
-import clients from '@/routes/clients';
+import { Form, Head } from '@inertiajs/react';
 
+import Field from '@/components/form/field';
+import FormActions from '@/components/form/form-actions';
+import PageHeader from '@/components/page-header';
+import { Input } from '@/components/ui/input';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import clients, { update } from '@/routes/clients';
+import type { BreadcrumbItem, Client } from '@/types';
 
 interface Props {
     client: Client;
 }
 
+export default function ClientEdit({ client }: Props) {
+    useFlashToast();
 
-export default function ClientEditPage({ client }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
-        {
-            title: 'Clients',
-            href: clients.index().url,
-        },
-        {
-            title: 'Edit',
-            href: clients.edit(client.id).url,
-        },
+        { title: 'Client', href: clients.index().url },
+        { title: client.nama_client, href: clients.edit(client.id).url },
     ];
-
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Client" />
-            <Form
-                {...update.form(client.id)}
-                className="flex flex-col gap-6 p-4"
-            >
-                {({ processing, errors }) => (
-                    <>
-                        <div className="grid gap-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="nama_client">Nama Client</Label>
+            <Head title={`Ubah ${client.nama_client}`} />
+
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader title="Ubah client" description="Kontrak yang sudah berjalan tidak ikut berubah" />
+
+                <Form {...update.form(client.id)} disableWhileProcessing className="flex max-w-xl flex-col gap-5">
+                    {({ processing, errors }) => (
+                        <>
+                            <Field id="nama_client" label="Nama client" error={errors.nama_client}>
                                 <Input
                                     id="nama_client"
-                                    type="text"
-                                    required
-                                    tabIndex={1}
-                                    autoComplete="nama_client"
                                     name="nama_client"
+                                    required
+                                    autoFocus
+                                    autoComplete="organization"
                                     defaultValue={client.nama_client}
-                                    placeholder="Nama Client"
+                                    className="h-12 sm:h-9"
                                 />
-                                <InputError
-                                    message={errors.nama_client}
-                                    className="mt-2"
-                                />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="alamat">Alamat</Label>
+                            <Field id="alamat" label="Alamat" error={errors.alamat}>
                                 <Input
                                     id="alamat"
-                                    type="text"
-                                    required
-                                    defaultValue={client.alamat}
-                                    tabIndex={2}
-                                    autoComplete="alamat"
                                     name="alamat"
-                                    placeholder="Alamat"
-                                />
-                                <InputError message={errors.alamat} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">Email</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
                                     required
-                                    defaultValue={client.email}
-                                    tabIndex={3}
-                                    autoComplete="email"
-                                    name="email"
-                                    placeholder="Email"
+                                    autoComplete="street-address"
+                                    defaultValue={client.alamat}
+                                    className="h-12 sm:h-9"
                                 />
-                                <InputError message={errors.email} />
+                            </Field>
+
+                            <div className="grid gap-5 sm:grid-cols-2">
+                                <Field id="email" label="Email" error={errors.email}>
+                                    <Input
+                                        id="email"
+                                        name="email"
+                                        type="email"
+                                        required
+                                        autoComplete="email"
+                                        defaultValue={client.email}
+                                        className="h-12 sm:h-9"
+                                    />
+                                </Field>
+
+                                <Field id="no_hp" label="Nomor HP" error={errors.no_hp}>
+                                    <Input
+                                        id="no_hp"
+                                        name="no_hp"
+                                        type="tel"
+                                        inputMode="tel"
+                                        maxLength={15}
+                                        required
+                                        autoComplete="tel"
+                                        defaultValue={client.no_hp}
+                                        className="num h-12 sm:h-9"
+                                    />
+                                </Field>
                             </div>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="no_hp">No. HP</Label>
-                                <Input
-                                    id="no_hp"
-                                    type="text"
-                                    required
-                                    defaultValue={client.no_hp}
-                                    tabIndex={4}
-                                    autoComplete="no_hp"
-                                    name="no_hp"
-                                    placeholder="No. HP"
-                                />
-                                <InputError message={errors.no_hp} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="deskripsi">Deskripsi</Label>
+                            <Field id="deskripsi" label="Deskripsi" error={errors.deskripsi} opsional>
                                 <Input
                                     id="deskripsi"
-                                    type="text"
-                                    defaultValue={client.deskripsi}
-                                    tabIndex={5}
-                                    autoComplete="deskripsi"
                                     name="deskripsi"
-                                    placeholder="Deskripsi"
+                                    defaultValue={client.deskripsi ?? ''}
+                                    className="h-12 sm:h-9"
                                 />
-                                <InputError message={errors.deskripsi} />
-                            </div>
+                            </Field>
 
-                            <div className='space-x-2'>
-                                <Button type="submit" className="mt-2 w-fit">
-                                    {processing ? (
-                                        <>
-                                            <Spinner className="mr-2" />
-                                            Saving...
-                                        </>
-                                    ) : (
-                                        'Save changes'
-                                    )}
-                                </Button>
-                                <Link href={'/clients'}>
-                                    <Button variant='outline' type="button" className="mt-2 w-fit">
-                                        Back
-                                    </Button>
-                                </Link>
-                            </div>
-                        </div>
-                    </>
-                )}
-            </Form>
+                            <FormActions
+                                processing={processing}
+                                simpan="Simpan perubahan"
+                                batalKe={clients.index().url}
+                            />
+                        </>
+                    )}
+                </Form>
+            </div>
         </AppLayout>
     );
 }

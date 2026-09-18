@@ -15,6 +15,11 @@ pest()->extend(Tests\TestCase::class)
     ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
     ->in('Feature');
 
+// Unit test membutuhkan aplikasi yang sudah boot agar config() dan model
+// Eloquent tersedia, tetapi sengaja tanpa RefreshDatabase — tidak satu pun
+// menyentuh basis data, dan itulah yang membuatnya cepat.
+pest()->extend(Tests\TestCase::class)->in('Unit');
+
 /*
 |--------------------------------------------------------------------------
 | Expectations
@@ -41,7 +46,39 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Pengguna dengan izin tertentu, berikut pendaftaran izinnya.
+ *
+ * Tabel izin kosong pada tiap test karena RefreshDatabase, dan spatie
+ * menyimpan daftar izin di cache dalam memori — keduanya harus diurus sebelum
+ * givePermissionTo dipanggil, dan itulah yang selama ini diulang di banyak
+ * berkas.
+ *
+ * @param  array<int, string>  $izin
+ */
+function penggunaDenganIzin(array $izin): \App\Models\User
 {
-    // ..
+    foreach ($izin as $nama) {
+        \Spatie\Permission\Models\Permission::findOrCreate($nama);
+    }
+
+    app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+
+    $user = \App\Models\User::factory()->create();
+
+    if ($izin !== []) {
+        $user->givePermissionTo($izin);
+    }
+
+    return $user;
+}
+
+/**
+ * Pengguna yang sah tetapi tidak memegang izin apa pun — dipakai untuk
+ * memastikan setiap aksi benar-benar dijaga, bukan hanya disembunyikan
+ * tombolnya di layar.
+ */
+function penggunaTanpaIzin(): \App\Models\User
+{
+    return penggunaDenganIzin([]);
 }

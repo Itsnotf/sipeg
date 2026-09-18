@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Karyawan;
 
+use App\Enums\JenisKelamin;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreRequest extends FormRequest
 {
@@ -19,6 +21,14 @@ class StoreRequest extends FormRequest
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
+    /*
+    | Status karyawan tidak ada di sini dengan sengaja.
+    |
+    | Nilainya diturunkan dari penempatan, bukan diketik: menyetelnya
+    | "Aktif" secara manual membuat pekerja hilang dari daftar pekerja
+    | yang tersedia untuk ditempatkan, selamanya, tanpa petunjuk apa pun.
+    | Satu-satunya penulis kolom itu adalah PenempatanKontrak.
+    */
     public function rules(): array
     {
         return [
@@ -27,9 +37,8 @@ class StoreRequest extends FormRequest
             'nik' => 'required|string|max:255|unique:karyawans,nik',
             'alamat' => 'required|string',
             'tanggal_lahir' => 'required|date',
-            'jenis_kelamin' => 'required|in:L,P',
+            'jenis_kelamin' => ['required', Rule::enum(JenisKelamin::class)],
             'no_hp' => 'required|string|max:15',
-            'status' => 'required|string|max:255',
         ];
     }
 }

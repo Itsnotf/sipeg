@@ -23,9 +23,8 @@ class StoreRequest extends FormRequest
     {
         return [
             'karyawan_id' => ['required', 'exists:karyawans,id'],
-            'jumlah' => ['required', 'string'],
+            'jumlah' => ['required', 'numeric', 'min:1'],
             'keterangan' => ['required', 'string'],
-            'status' => ['nullable', 'in:dibayar,belum dibayar'],
         ];
     }
 }

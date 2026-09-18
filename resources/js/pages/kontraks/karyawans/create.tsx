@@ -1,174 +1,187 @@
-import { Button } from '@/components/ui/button';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, Form } from '@inertiajs/react';
-import kontraks from '@/routes/kontraks';
-import { BreadcrumbItem, Karyawan } from '@/types';
-import InputError from '@/components/input-error';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Form, Head } from '@inertiajs/react';
+import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import EmptyState from '@/components/empty-state';
+import FormActions from '@/components/form/form-actions';
+import InputError from '@/components/input-error';
+import PageHeader from '@/components/page-header';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import { rupiah } from '@/lib/utils';
+import kontraks from '@/routes/kontraks';
+import kontrakKaryawans, { store } from '@/routes/kontraks/karyawans';
+import type { BreadcrumbItem } from '@/types';
+
+interface KaryawanTersedia {
+    id: number;
+    nama: string;
+    nik: number | string | null;
+    jabatan: string | null;
+    gaji: number;
+}
 
 interface Props {
     kontrak_id: string;
-    karyawans: Karyawan[];
+    karyawans: KaryawanTersedia[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Kontraks', href: kontraks.index().url },
-    { title: 'Karyawan', href: '#' },
-    { title: 'Create', href: '#' },
-];
+export default function PenempatanCreate({ kontrak_id, karyawans }: Props) {
+    useFlashToast();
 
-export default function KaryawanCreatePage({ kontrak_id, karyawans }: Props) {
-    const [selectedKaryawans, setSelectedKaryawans] = useState<(string | number)[]>([]);
-    const [search, setSearch] = useState('');
+    const [terpilih, setTerpilih] = useState<number[]>([]);
+    const [cari, setCari] = useState('');
 
-    const filteredKaryawans = useMemo(() => {
+    const hasil = useMemo(() => {
+        const kunci = cari.trim().toLowerCase();
+        if (!kunci) return karyawans;
+
         return karyawans.filter((k) =>
-            k.nama.toLowerCase().includes(search.toLowerCase()) ||
-            k.nik?.toString().toLowerCase().includes(search.toLowerCase()) ||
-            k.jabatan.nama_jabatan?.toLowerCase().includes(search.toLowerCase())
+            [k.nama, String(k.nik ?? ''), k.jabatan ?? ''].some((nilai) => nilai.toLowerCase().includes(kunci)),
         );
-    }, [search, karyawans]);
+    }, [cari, karyawans]);
 
-    const toggleKaryawan = (id: string | number) => {
-        setSelectedKaryawans((prev) =>
-            prev.includes(id)
-                ? prev.filter((k) => k !== id)
-                : [...prev, id]
+    const semuaHasilTerpilih = hasil.length > 0 && hasil.every((k) => terpilih.includes(k.id));
+
+    const bebanBulanan = useMemo(
+        () => karyawans.filter((k) => terpilih.includes(k.id)).reduce((jumlah, k) => jumlah + k.gaji, 0),
+        [karyawans, terpilih],
+    );
+
+    const ubah = (id: number) => {
+        setTerpilih((sebelumnya) =>
+            sebelumnya.includes(id) ? sebelumnya.filter((n) => n !== id) : [...sebelumnya, id],
+        );
+    };
+
+    const ubahSemuaHasil = () => {
+        const ids = hasil.map((k) => k.id);
+
+        setTerpilih((sebelumnya) =>
+            semuaHasilTerpilih
+                ? sebelumnya.filter((id) => !ids.includes(id))
+                : [...new Set([...sebelumnya, ...ids])],
         );
     };
 
-    const toggleAllFiltered = () => {
-        const ids: (string | number)[] = filteredKaryawans.map((k) => k.id);
-        const allSelected = ids.every((id) => selectedKaryawans.includes(id));
-
-        setSelectedKaryawans((prev) =>
-            allSelected
-                ? prev.filter((id) => !ids.includes(id))
-                : [...new Set([...prev, ...ids])]
-        );
-    };
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Kontrak', href: kontraks.index().url },
+        { title: 'Penempatan', href: kontrakKaryawans.index(kontrak_id).url },
+        { title: 'Tambah', href: kontrakKaryawans.create(kontrak_id).url },
+    ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Tambah Karyawan Kontrak" />
+            <Head title="Tambah penempatan" />
 
-            <Form
-                method="post"
-                action={`/kontraks/${kontrak_id}/karyawans`}
-                className="w-full p-4"
-            >
-                {({ processing, errors }) => (
-                    <Card className=''>
-                        <CardHeader className="space-y-3">
-                            <Label>Pilih Karyawan</Label>
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Tambah penempatan"
+                    description="Hanya pekerja tanpa penempatan aktif yang tampil di sini. Penempatan dimulai hari ini, atau saat kontrak mulai bila kontraknya belum berjalan"
+                />
 
-                            <div className="flex gap-2">
-                                <Input
-                                    placeholder="Cari nama, NIK, atau jabatan..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                />
+                <Form {...store.form(kontrak_id)} disableWhileProcessing className="flex flex-col gap-5">
+                    {({ processing, errors }) => (
+                        <>
+                            {terpilih.map((id) => (
+                                <input key={id} type="hidden" name="karyawan_id[]" value={id} />
+                            ))}
+
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                                <div className="relative flex-1">
+                                    <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                                    <Input
+                                        value={cari}
+                                        onChange={(e) => setCari(e.target.value)}
+                                        placeholder="Cari nama, NIK, atau jabatan"
+                                        aria-label="Cari karyawan"
+                                        className="h-12 pl-9 sm:h-9"
+                                    />
+                                </div>
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    onClick={toggleAllFiltered}
+                                    onClick={ubahSemuaHasil}
+                                    disabled={hasil.length === 0}
+                                    className="h-12 sm:h-9"
                                 >
-                                    {filteredKaryawans.length > 0 &&
-                                        filteredKaryawans.every((k) => selectedKaryawans.includes(k.id))
-                                        ? 'Uncheck All'
-                                        : 'Check All'}
+                                    {semuaHasilTerpilih ? 'Batalkan semua' : 'Pilih semua'}
                                 </Button>
                             </div>
-                        </CardHeader>
 
-                        <CardContent className="space-y-4">
-                            {/* Hidden inputs untuk mengirim selected karyawans */}
-                            {selectedKaryawans.map((id) => (
-                                <input
-                                    key={`hidden-${id}`}
-                                    type="hidden"
-                                    name="karyawan_id[]"
-                                    value={id}
+                            {hasil.length === 0 ? (
+                                <EmptyState
+                                    icon={Search}
+                                    title={cari ? 'Tidak ada yang cocok' : 'Tidak ada pekerja tersedia'}
+                                    description={
+                                        cari
+                                            ? 'Coba kata kunci lain, atau kosongkan pencarian.'
+                                            : 'Semua pekerja sedang ditempatkan pada kontrak lain.'
+                                    }
                                 />
-                            ))}
-
-                            {filteredKaryawans.length === 0 ? (
-                                <div className="text-center text-sm text-muted-foreground py-10">
-                                    Karyawan tidak ditemukan
-                                </div>
                             ) : (
-                                <ScrollArea className="h-[360px] pr-4">
-                                    <div className="space-y-2">
-                                        {filteredKaryawans.map((karyawan) => (
-                                            <label
-                                                key={karyawan.id}
-                                                className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted"
-                                            >
-                                                <Checkbox
-                                                    checked={selectedKaryawans.includes(karyawan.id)}
-                                                    onCheckedChange={() => toggleKaryawan(karyawan.id)}
-                                                />
+                                <ul className="border-border divide-border divide-y rounded-sm border">
+                                    {hasil.map((karyawan) => {
+                                        const id = `karyawan-${karyawan.id}`;
+                                        const dipilih = terpilih.includes(karyawan.id);
 
-                                                <div className="flex-1">
-                                                    <p className="font-medium text-sm">
-                                                        {karyawan.nama}
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {karyawan.nik && `nik: ${karyawan.nik}`}
-                                                        {karyawan.nik && karyawan.jabatan && ' • Jabatan: '}
-                                                        {karyawan.jabatan?.nama_jabatan}
-                                                    </p>
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </ScrollArea>
+                                        return (
+                                            <li key={karyawan.id}>
+                                                <label
+                                                    htmlFor={id}
+                                                    className="hover:bg-muted/50 flex cursor-pointer items-center gap-3 px-3 py-3"
+                                                >
+                                                    <Checkbox
+                                                        id={id}
+                                                        checked={dipilih}
+                                                        onCheckedChange={() => ubah(karyawan.id)}
+                                                    />
+                                                    <span className="flex min-w-0 flex-1 flex-col">
+                                                        <span className="truncate text-sm font-medium">
+                                                            {karyawan.nama}
+                                                        </span>
+                                                        <span className="text-muted-foreground truncate text-xs">
+                                                            <span className="num">{karyawan.nik ?? '—'}</span>
+                                                            {karyawan.jabatan ? ` · ${karyawan.jabatan}` : null}
+                                                        </span>
+                                                    </span>
+                                                    <span className="num text-muted-foreground shrink-0 text-xs">
+                                                        {rupiah(karyawan.gaji)}
+                                                    </span>
+                                                </label>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
                             )}
 
-                            <InputError message={errors['karyawan_id']} />
-                            <InputError message={errors['karyawan_id.*']} />
+                            <InputError message={errors.karyawan_id ?? errors['karyawan_id.0']} />
 
-                            <div className="flex justify-between items-center">
-                                <p className="text-sm text-muted-foreground">
-                                    Dipilih: <span className="font-medium">{selectedKaryawans.length}</span> karyawan
-                                </p>
+                            <p className="text-muted-foreground text-sm">
+                                <span className="num text-foreground font-medium">{terpilih.length}</span> pekerja
+                                dipilih
+                                {terpilih.length > 0 ? (
+                                    <>
+                                        {' · tambahan beban gaji pokok '}
+                                        <span className="num text-foreground font-medium">{rupiah(bebanBulanan)}</span>
+                                        {' per bulan'}
+                                    </>
+                                ) : null}
+                            </p>
 
-                                <div className="flex gap-2">
-                                    <Button
-                                        type="submit"
-                                        disabled={selectedKaryawans.length === 0 || processing}
-                                    >
-                                        {processing ? (
-                                            <>
-                                                <Spinner className="mr-2" />
-                                                Menambahkan...
-                                            </>
-                                        ) : (
-                                            `Tambah (${selectedKaryawans.length})`
-                                        )}
-                                    </Button>
-
-                                    <Button
-                                        variant='outline'
-                                        type="button"
-                                        className="mt-2 w-fit"
-                                        onClick={() => window.history.back()}
-                                    >
-                                        Back
-                                    </Button>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-            </Form>
+                            <FormActions
+                                processing={processing}
+                                nonaktif={terpilih.length === 0}
+                                simpan={terpilih.length > 0 ? `Tempatkan ${terpilih.length} pekerja` : 'Tempatkan'}
+                                batalKe={kontrakKaryawans.index(kontrak_id).url}
+                            />
+                        </>
+                    )}
+                </Form>
+            </div>
         </AppLayout>
     );
 }

@@ -1,165 +1,167 @@
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, router, usePage } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
-import DeleteButton from '@/components/delete-button';
-import { Edit2Icon, PlusCircle } from 'lucide-react';
-import { BreadcrumbItem, KontrakDokumen, SharedData } from '@/types';
-import { toast } from 'sonner';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip"
-import hasAnyPermission from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
-import kontraks from '@/routes/kontraks';
+import { Head, Link, router } from '@inertiajs/react';
+import { FileText, PlusCircle, Search, SquarePen } from 'lucide-react';
+import { useState } from 'react';
+
+import DataList, { type DataColumn } from '@/components/data-list';
 import DeleteButtonChild from '@/components/delete-button-child';
+import EmptyState from '@/components/empty-state';
+import PageHeader from '@/components/page-header';
+import Pagination, { type Paginated } from '@/components/pagination';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import hasAnyPermission, { tanggal } from '@/lib/utils';
+import kontraks from '@/routes/kontraks';
+import dokumens from '@/routes/kontraks/dokumens';
+import type { BreadcrumbItem } from '@/types';
 
-
-interface Props {
-    kontrak_id: number | string
-    dokumens: {
-        data: KontrakDokumen[];
-        links: any[];
-    };
-    filters: {
-        search?: string;
-    };
-    flash?: {
-        success?: string;
-    };
+interface Dokumen {
+    id: number;
+    kontrak_id: number;
+    nama_dokumen: string;
+    file: string | null;
+    diunggah: string | null;
 }
 
+interface Props {
+    kontrak_id: string;
+    kontrak: { id: number; judul: string };
+    dokumens: Paginated<Dokumen>;
+    filters: { search?: string };
+}
 
-export default function DokumenPage({ kontrak_id, dokumens, filters, flash }: Props) {
+export default function DokumenIndex({ kontrak_id, kontrak, dokumens: list, filters }: Props) {
+    useFlashToast();
+    const [search, setSearch] = useState(filters.search ?? '');
 
     const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Kontrak', href: kontraks.index().url },
+        { title: kontrak.judul, href: kontraks.show(kontrak.id).url },
+        { title: 'Dokumen', href: dokumens.index(kontrak_id).url },
+    ];
+
+    const columns: DataColumn<Dokumen>[] = [
         {
-            title: 'Kontraks',
-            href: kontraks.index.url(),
+            key: 'nama',
+            header: 'Dokumen',
+            primary: true,
+            cell: (row) => <span className="font-semibold">{row.nama_dokumen}</span>,
         },
         {
-            title: 'Dokumens',
-            href: `/kontraks/${kontrak_id}/dokumens`,
+            key: 'berkas',
+            header: 'Berkas',
+            cell: (row) =>
+                row.file ? (
+                    <a
+                        href={`/storage/${row.file}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-muted-foreground hover:text-foreground line-clamp-1 text-[13px] underline underline-offset-4"
+                    >
+                        {row.file.split('/').pop()}
+                    </a>
+                ) : (
+                    <span className="text-muted-foreground text-[13px]">—</span>
+                ),
+        },
+        {
+            key: 'diunggah',
+            header: 'Diunggah',
+            width: 'w-44',
+            cell: (row) => <span className="num text-muted-foreground text-[13px]">{tanggal(row.diunggah)}</span>,
         },
     ];
 
-    const user = usePage<SharedData>().props.auth.user;
-
-    const [search, setSearch] = useState(filters.search || '');
-    const [shownMessages] = useState(new Set());
-
-    useEffect(() => {
-        if (flash?.success && !shownMessages.has(flash.success)) {
-            toast.success(flash.success);
-            shownMessages.add(flash.success);
-        }
-    }, [flash?.success]);
-
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        router.get(`/kontraks/${kontrak_id}/dokumens`, { search }, { preserveState: true });
-    };
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Dokumens" />
+            <Head title={`Dokumen · ${kontrak.judul}`} />
 
-            <div className="p-4 space-y-4">
-
-                {/* Search Bar */}
-                <div className='flex space-x-1'>
-                    <form onSubmit={handleSearch} className="flex gap-2 w-full md:w-1/3">
-                        <Input
-                            placeholder="Search dokumens..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                        <Button variant='outline' type="submit">Search</Button>
-                    </form>
-                    {hasAnyPermission(["kontraks dokumens create"]) && (
-                        <Link href={`/kontraks/${kontrak_id}/dokumens/create`}>
-                            <Button variant='default' className='group flex items-center'>
-                                <PlusCircle className='group-hover:rotate-90 transition-all' />
-                                Add Dokumens
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    eyebrow={kontrak.judul}
+                    title="Dokumen kontrak"
+                    description="Berkas perjanjian, adendum, dan lampiran lain yang melekat pada kontrak ini"
+                    actions={
+                        hasAnyPermission(['kontraks dokumens create']) ? (
+                            <Button asChild className="h-11 w-full sm:h-9 sm:w-auto">
+                                <Link href={dokumens.create(kontrak_id)}>
+                                    <PlusCircle />
+                                    Unggah dokumen
+                                </Link>
                             </Button>
-                        </Link>
-                    )}
-                </div>
+                        ) : null
+                    }
+                />
 
-                {/* Karyawan Table */}
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Nama Dokumen</TableHead>
-                            <TableHead>File</TableHead>
-                            <TableHead>Action</TableHead>
-                        </TableRow>
-                    </TableHeader>
-
-                    <TableBody>
-                        {dokumens.data.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={8} className="h-[65vh]  text-center">
-                                    Belum Ada Data Dokumens.
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            dokumens.data.map((dokumen) => (
-                                <TableRow key={dokumen.id}>
-                                    <TableCell>{dokumen.nama_dokumen}</TableCell>
-                                    <TableCell>
-                                        <a href={`/storage/${dokumen.file}`} target="_blank" rel="noopener noreferrer">
-                                            <Button variant='link'>
-                                                View File
-                                            </Button>
-                                        </a>
-                                    </TableCell>
-
-                                    <TableCell className="space-x-2">
-                                        {hasAnyPermission(["kontraks dokumens edit"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <Link href={`/kontraks/${kontrak_id}/dokumens/${dokumen.id}/edit`}>
-                                                        <Button variant="outline" size="sm" className='hover:bg-blue-200 hover:text-blue-600'> <Edit2Icon /></Button>
-                                                    </Link>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Edit
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-
-                                        {hasAnyPermission(["karyawans delete"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <DeleteButtonChild id={dokumen.kontrak_id} featured='kontraks' child='dokumens' child_id={dokumen.id} />
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Delete
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            )))}
-                    </TableBody>
-                </Table>
-
-                <div className="flex gap-1">
-                    {dokumens.links.map((link, i) => (
-                        <Link
-                            key={i}
-                            href={link.url ?? '#'}
-                            className={`px-3 py-1 flex justify-center items-center border rounded-md ${link.active ? 'bg-black text-white text-sm' : 'text-sm'}`}
-                            dangerouslySetInnerHTML={{ __html: link.label }}
+                <form
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        router.get(dokumens.index(kontrak_id).url, { search }, { preserveState: true, replace: true });
+                    }}
+                    className="flex gap-2 sm:max-w-md"
+                >
+                    <div className="relative flex-1">
+                        <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                        <Input
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder="Cari nama dokumen"
+                            className="h-11 pl-9 sm:h-9"
                         />
-                    ))}
-                </div>
+                    </div>
+                    <Button type="submit" variant="outline" className="h-11 sm:h-9">
+                        Cari
+                    </Button>
+                </form>
 
+                <DataList
+                    columns={columns}
+                    rows={list.data}
+                    rowKey={(row) => row.id}
+                    actions={(row) => (
+                        <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+                            {hasAnyPermission(['kontraks dokumens edit']) && (
+                                <Button asChild variant="outline" size="sm" className="h-11 flex-1 sm:h-8 sm:flex-none">
+                                    <Link href={dokumens.edit([kontrak_id, row.id])}>
+                                        <SquarePen />
+                                        Ubah
+                                    </Link>
+                                </Button>
+                            )}
+                            {/* Sebelumnya tombol ini diuji dengan izin "karyawans delete". */}
+                            {hasAnyPermission(['kontraks dokumens delete']) && (
+                                <DeleteButtonChild
+                                    id={row.kontrak_id}
+                                    featured="kontraks"
+                                    child="dokumens"
+                                    child_id={row.id}
+                                    nama={row.nama_dokumen}
+                                />
+                            )}
+                        </div>
+                    )}
+                    empty={
+                        <EmptyState
+                            icon={FileText}
+                            title={filters.search ? 'Tidak ada dokumen yang cocok' : 'Belum ada dokumen'}
+                            description={
+                                filters.search
+                                    ? 'Coba kata kunci lain, atau kosongkan pencarian untuk melihat semuanya.'
+                                    : 'Unggah surat perjanjian atau lampiran lain agar tersimpan bersama kontrak ini.'
+                            }
+                            action={
+                                !filters.search && hasAnyPermission(['kontraks dokumens create']) ? (
+                                    <Button asChild>
+                                        <Link href={dokumens.create(kontrak_id)}>Unggah dokumen pertama</Link>
+                                    </Button>
+                                ) : null
+                            }
+                        />
+                    }
+                />
+
+                <Pagination meta={list} noun="dokumen" />
             </div>
         </AppLayout>
     );

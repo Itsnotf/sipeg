@@ -32,7 +32,9 @@ export interface SharedData {
     flash?: {
         success?: string;
         error?: string;
+        info?: string;
     };
+    errors?: Record<string, string>;
     [key: string]: unknown;
 }
 
@@ -41,10 +43,9 @@ export interface User {
     name: string;
     email: string;
     avatar?: string;
+    /** Sudah diformat Y-m-d di server; null bila belum terverifikasi. */
     email_verified_at: string | null;
     two_factor_enabled?: boolean;
-    created_at: string;
-    updated_at: string;
     roles?: Role;
     [key: string]: unknown; // This allows for additional properties...
 }
@@ -52,18 +53,14 @@ export interface User {
 export interface Permission {
     id: number;
     name: string;
-    guard_name: string;
-    created_at: string;
-    updated_at: string;
-    [key: string]: boolean;
+    /* Hanya dikirim oleh endpoint role; prop bersama hanya membawa id dan nama. */
+    guard_name?: string;
 }
 
 export interface Role {
     id: number;
     name: string;
-    guard_name: string;
-    created_at: string;
-    updated_at: string;
+    guard_name?: string;
     permissions?: Permission[];
 }
 
@@ -72,9 +69,10 @@ export interface Jabatan {
     nama_jabatan: string;
     deskripsi: string;
     gaji: string;
-    bpjs: string;
-    created_at: string;
-    update_at: string;
+    /** Nominal rupiah historis, dipertahankan sebagai rujukan sebelum BPJS menjadi persentase. */
+    bpjs: string | null;
+    /** Persentase gaji pokok; nominalnya dihitung saat penggajian diproses. */
+    bpjs_persen: string;
 }
 
 export interface Karyawan {
@@ -97,8 +95,6 @@ export interface Client {
     alamat: string;
     email: string;
     no_hp: string;
-    created_at: string;
-    updated_at: string;
 }
 
 export interface Kontrak {
@@ -111,8 +107,6 @@ export interface Kontrak {
     tanggal_gajian: string;
     status: string;
     total_biaya: string;
-    created_at: string;
-    updated_at: string;
     client : Client
 }
 
@@ -121,16 +115,12 @@ export interface KontrakDokumen {
     kontrak_id: number;
     nama_dokumen: string;
     file: string;
-    created_at: string;
-    updated_at: string;
 }
 
 export interface KontrakKaryawan {
     id: number;
     kontrak_id : number;
     karyawan_id : number;
-    created_at: string;
-    updated_at: string;
     kontrak: Kontrak;
     karyawan: Karyawan;
 }
@@ -141,7 +131,5 @@ export interface Cashbon {
     jumlah : string;
     keterangan: string;
     status : string;
-    created_at : string;
-    updated_at : string;
     karyawan: Karyawan;
 }

@@ -1,129 +1,122 @@
-import { Button } from '@/components/ui/button';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, router, Form } from '@inertiajs/react';
-import { Input } from '@/components/ui/input';
-import { update } from '@/routes/jabatans';
-import { BreadcrumbItem, Jabatan } from '@/types';
-import InputError from '@/components/input-error';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
-import jabatans from '@/routes/jabatans';
+import { Form, Head } from '@inertiajs/react';
+import { useState } from 'react';
 
+import Field from '@/components/form/field';
+import FormActions from '@/components/form/form-actions';
+import PageHeader from '@/components/page-header';
+import { Input } from '@/components/ui/input';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import { rupiah } from '@/lib/utils';
+import jabatans, { update } from '@/routes/jabatans';
+import type { BreadcrumbItem, Jabatan } from '@/types';
 
 interface Props {
     jabatan: Jabatan;
 }
 
+export default function JabatanEdit({ jabatan }: Props) {
+    useFlashToast();
 
-export default function JabatanEditPage({ jabatan }: Props) {
+    const [gaji, setGaji] = useState(String(jabatan.gaji ?? ''));
+    const [persen, setPersen] = useState(String(jabatan.bpjs_persen ?? ''));
+
+    const bpjsPerBulan = Number(gaji || 0) * (Number(persen || 0) / 100);
+
     const breadcrumbs: BreadcrumbItem[] = [
-        {
-            title: 'Jabatan',
-            href: jabatans.index().url,
-        },
-        {
-            title: 'Edit',
-            href: jabatans.edit(jabatan.id).url,
-        },
+        { title: 'Jabatan', href: jabatans.index().url },
+        { title: jabatan.nama_jabatan, href: jabatans.edit(jabatan.id).url },
     ];
-
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Jabatan" />
-            <Form
-                {...update.form(jabatan.id)}
-                className="flex flex-col gap-6 p-4"
-            >
-                {({ processing, errors }) => (
-                    <>
-                        <div className="grid gap-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="nama_jabatan">Nama Jabatan</Label>
+            <Head title={`Ubah ${jabatan.nama_jabatan}`} />
+
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Ubah jabatan"
+                    description="Perubahan gaji berlaku pada periode penggajian berikutnya; slip yang sudah tersusun memakai nominal saat itu"
+                />
+
+                <Form {...update.form(jabatan.id)} disableWhileProcessing className="flex max-w-xl flex-col gap-5">
+                    {({ processing, errors }) => (
+                        <>
+                            <Field id="nama_jabatan" label="Nama jabatan" error={errors.nama_jabatan}>
                                 <Input
                                     id="nama_jabatan"
-                                    type="text"
-                                    required
-                                    tabIndex={1}
-                                    autoComplete="nama_jabatan"
                                     name="nama_jabatan"
+                                    required
+                                    autoFocus
+                                    autoComplete="organization-title"
                                     defaultValue={jabatan.nama_jabatan}
-                                    placeholder="Nama Jabatan"
+                                    className="h-12 sm:h-9"
                                 />
-                                <InputError
-                                    message={errors.nama_jabatan}
-                                    className="mt-2"
-                                />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="deskripsi">Deskripsi</Label>
+                            <Field id="deskripsi" label="Deskripsi" error={errors.deskripsi}>
                                 <Input
                                     id="deskripsi"
-                                    type="text"
+                                    name="deskripsi"
                                     required
                                     defaultValue={jabatan.deskripsi}
-                                    tabIndex={2}
-                                    autoComplete="deskripsi"
-                                    name="deskripsi"
-                                    placeholder="Deskripsi"
+                                    className="h-12 sm:h-9"
                                 />
-                                <InputError message={errors.deskripsi} />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="gaji">Gaji</Label>
+                            <Field
+                                id="gaji"
+                                label="Gaji pokok per bulan"
+                                error={errors.gaji}
+                                hint={gaji ? rupiah(gaji) : 'Nominal sebelum BPJS dan potongan'}
+                            >
                                 <Input
                                     id="gaji"
-                                    type="number"
-                                    required
-                                    defaultValue={jabatan.gaji}
-                                    tabIndex={2}
-                                    autoComplete="gaji"
                                     name="gaji"
-                                    placeholder="Gaji"
-                                />
-                                <InputError message={errors.gaji} />
-                            </div>
-                            
-                            <div className="grid gap-2">
-                                <Label htmlFor="bpjs">BPJS</Label>
-                                <Input
-                                    id="bpjs"
                                     type="number"
+                                    inputMode="numeric"
+                                    min="0"
+                                    step="1000"
                                     required
-                                    defaultValue={jabatan.bpjs}
-                                    tabIndex={2}
-                                    autoComplete="bpjs"
-                                    name="bpjs"
-                                    placeholder="BPJS"
+                                    value={gaji}
+                                    onChange={(e) => setGaji(e.target.value)}
+                                    className="num h-12 sm:h-9"
                                 />
-                                <InputError message={errors.bpjs} />
-                            </div>
+                            </Field>
 
+                            <Field
+                                id="bpjs_persen"
+                                label="BPJS (%)"
+                                error={errors.bpjs_persen}
+                                hint={
+                                    gaji
+                                        ? `${rupiah(bpjsPerBulan)} per bulan, dihitung ulang otomatis bila gaji berubah`
+                                        : 'Persentase dari gaji pokok, bukan nominal tetap'
+                                }
+                            >
+                                <Input
+                                    id="bpjs_persen"
+                                    name="bpjs_persen"
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="0.01"
+                                    min="0"
+                                    max="100"
+                                    required
+                                    value={persen}
+                                    onChange={(e) => setPersen(e.target.value)}
+                                    className="num h-12 sm:h-9"
+                                />
+                            </Field>
 
-
-                            <div className='space-x-2'>
-                                <Button type="submit" className="mt-2 w-fit">
-                                    {processing ? (
-                                        <>
-                                            <Spinner className="mr-2" />
-                                            Saving...
-                                        </>
-                                    ) : (
-                                        'Save changes'
-                                    )}
-                                </Button>
-                                <Link href={'/jabatans'}>
-                                    <Button variant='outline' type="button" className="mt-2 w-fit">
-                                        Back
-                                    </Button>
-                                </Link>
-                            </div>
-                        </div>
-                    </>
-                )}
-            </Form>
+                            <FormActions
+                                processing={processing}
+                                simpan="Simpan perubahan"
+                                batalKe={jabatans.index().url}
+                            />
+                        </>
+                    )}
+                </Form>
+            </div>
         </AppLayout>
     );
 }

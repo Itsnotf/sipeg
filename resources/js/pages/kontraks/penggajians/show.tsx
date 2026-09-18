@@ -1,282 +1,385 @@
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, router, usePage } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
-import { ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
-import { BreadcrumbItem, SharedData, Kontrak } from '@/types';
-import { toast } from 'sonner';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip"
-import hasAnyPermission from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
-import kontraks from '@/routes/kontraks';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
+import { Head, Link, router } from '@inertiajs/react';
+import { Lock, Users } from 'lucide-react';
+import { useState } from 'react';
 
-interface PenggajianDetail {
+import EmptyState from '@/components/empty-state';
+import PageHeader from '@/components/page-header';
+import StatusBadge from '@/components/status-badge';
+import { Button } from '@/components/ui/button';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import hasAnyPermission, { angka, periodeLabel, rupiah, tanggal, tanggalRingkas } from '@/lib/utils';
+import kontraks from '@/routes/kontraks';
+import type { BreadcrumbItem, Kontrak } from '@/types';
+
+interface Potongan {
     id: number;
-    karyawan_id: number;
-    gaji_pokok: string;
-    bpjs: string;
-    potongan_cashbon: string;
-    total_gaji: string;
-    karyawan?: {
-        id: number;
-        nama: string;
-        jabatan?: {
-            nama_jabatan: string;
-        }
-    }
+    jumlah: number;
+    keterangan: string;
+    pinjaman: number;
+    sisa: number;
 }
 
-interface Penggajian {
+interface Detail {
     id: number;
-    kontrak_id: number;
-    periode: string;
-    status: string;
-    created_at: string;
-    updated_at: string;
-    penggajianDetails: PenggajianDetail[];
+    karyawan_id: number;
+    gaji_pokok_penuh: number;
+    gaji_pokok: number;
+    bpjs_persen: number;
+    bpjs: number;
+    potongan_cashbon: number;
+    total_gaji: number;
+    hari_aktif: number;
+    hari_periode: number;
+    karyawan: { id: number; nama: string; jabatan: { nama_jabatan: string } };
+    potongans: Potongan[];
 }
 
 interface Props {
     kontrak_id: number | string;
     kontrak: Kontrak;
-    penggajian: Penggajian;
-    summary: {
-        total_gaji: number;
-        total_bpjs: number;
-        total_cashbon: number;
-        karyawan_count: number;
+    penggajian: {
+        id: number;
+        periode: string;
+        periode_mulai: string | null;
+        periode_selesai: string | null;
+        tanggal_bayar: string | null;
+        final: boolean;
+        status: string;
+        penggajianDetails: Detail[];
     };
+    summary: { total_gaji: number; total_bpjs: number; total_cashbon: number; karyawan_count: number };
 }
 
-export default function PenggajianShowPage({ kontrak_id, kontrak, penggajian, summary }: Props) {
+/** Satu pasangan label–nilai di kartu slip ponsel. */
+function Baris({
+    label,
+    value,
+    strong,
+    negative,
+}: {
+    label: React.ReactNode;
+    value: React.ReactNode;
+    strong?: boolean;
+    negative?: boolean;
+}) {
+    return (
+        <div className="flex items-baseline justify-between gap-4">
+            <span className={strong ? 'text-sm font-semibold' : 'text-muted-foreground text-[13px]'}>{label}</span>
+            <span className={`num text-sm ${negative ? 'text-crit' : ''}`}>{value}</span>
+        </div>
+    );
+}
+
+/** Rincian buku besar: cashbon mana yang menyumbang berapa pada slip ini. */
+function BukuBesar({ potongans }: { potongans: Potongan[] }) {
+    if (potongans.length === 0) return null;
+
+    return (
+        <div className="border-primary/45 ml-0.5 flex flex-col gap-2 border-l-2 py-1.5 pl-3">
+            <span className="eyebrow text-primary">Buku besar potongan</span>
+            {potongans.map((potongan) => (
+                <div key={potongan.id} className="flex flex-col gap-0.5">
+                    <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-muted-foreground text-[13px]">{potongan.keterangan}</span>
+                        <span className="num shrink-0 text-[13px]">{rupiah(potongan.jumlah)}</span>
+                    </div>
+                    <span className="num text-muted-foreground/80 text-[11px]">
+                        pinjaman {rupiah(potongan.pinjaman)} · sisa {rupiah(potongan.sisa)}
+                    </span>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+export default function PenggajianShow({ kontrak_id, kontrak, penggajian, summary }: Props) {
+    useFlashToast();
+    const [paying, setPaying] = useState(false);
+
+
+    const dibayar = penggajian.status === 'dibayar';
+    const details = penggajian.penggajianDetails;
+    const totalGajiPokok = details.reduce((sum, d) => sum + Number(d.gaji_pokok), 0);
+
     const breadcrumbs: BreadcrumbItem[] = [
-        {
-            title: 'Kontraks',
-            href: kontraks.index.url(),
-        },
-        {
-            title: kontrak.judul,
-            href: `/kontraks/${kontrak_id}`,
-        },
-        {
-            title: 'Penggajians',
-            href: `/kontraks/${kontrak_id}/penggajians`,
-        },
-        {
-            title: formatDate(penggajian.periode),
-            href: `/kontraks/${kontrak_id}/penggajians/${penggajian.id}`,
-        },
+        { title: 'Kontrak', href: kontraks.index().url },
+        { title: kontrak.judul, href: kontraks.show(kontrak_id).url },
+        { title: 'Penggajian', href: kontraks.penggajians.index(kontrak_id).url },
+        { title: periodeLabel(penggajian.periode), href: kontraks.penggajians.show([kontrak_id, penggajian.id]).url },
     ];
 
-    const user = usePage<SharedData>().props.auth.user;
-    const [isUpdating, setIsUpdating] = useState(false);
-    const [showStatusDialog, setShowStatusDialog] = useState(false);
-    const [newStatus, setNewStatus] = useState(penggajian.status);
-
-    const handleStatusUpdate = () => {
-        setIsUpdating(true);
-        router.put(`/kontraks/${kontrak_id}/penggajians/${penggajian.id}`, 
-            { status: newStatus },
-            {
-                onFinish: () => {
-                    setIsUpdating(false);
-                    setShowStatusDialog(false);
-                },
-            }
-        );
-    };
-
-    function formatDate(date: string) {
-        return new Date(date).toLocaleDateString('id-ID', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
-    }
-
-    function formatCurrency(value: string | number) {
-        const num = typeof value === 'string' ? parseFloat(value) : value;
-        return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0,
-        }).format(num);
-    }
-
-    const getStatusBadge = (status: string) => {
-        return status === 'dibayar' ? (
-            <div className='flex items-center gap-2'>
-                <CheckCircle2 className='w-5 h-5 text-green-500' />
-                <Badge className='bg-green-500'>Dibayar</Badge>
-            </div>
-        ) : (
-            <div className='flex items-center gap-2'>
-                <Clock className='w-5 h-5 text-yellow-500' />
-                <Badge className='bg-yellow-500'>Belum Dibayar</Badge>
-            </div>
+    const tandaiDibayar = () => {
+        setPaying(true);
+        router.put(
+            kontraks.penggajians.update([kontrak_id, penggajian.id]).url,
+            { status: 'dibayar' },
+            { onFinish: () => setPaying(false), preserveScroll: true },
         );
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Penggajian - ${formatDate(penggajian.periode)}`} />
+            <Head title={`Penggajian ${periodeLabel(penggajian.periode)}`} />
 
-            <div className="p-4 space-y-6">
-
-                {/* Header Section */}
-                <div className='flex items-center justify-between'>
-                    <div className='flex items-center gap-4'>
-                        <Link href={`/kontraks/${kontrak_id}/penggajians`}>
-                            <Button variant='outline' size='icon'>
-                                <ArrowLeft className='w-4 h-4' />
-                            </Button>
-                        </Link>
-                        <div>
-                            <h1 className='text-2xl font-bold'>{formatDate(penggajian.periode)}</h1>
-                            <p className='text-gray-500'>{kontrak.judul}</p>
-                        </div>
-                    </div>
-                    <div className='flex items-center gap-4'>
-                        {getStatusBadge(penggajian.status)}
-                        {hasAnyPermission(["penggajians update"]) && (
-                            <Button 
-                                onClick={() => setShowStatusDialog(true)}
-                                variant='outline'
-                            >
-                                Ubah Status
-                            </Button>
-                        )}
-                    </div>
-                </div>
-
-                {/* Summary Cards */}
-                <div className='grid grid-cols-4 gap-4'>
-                    <div className='border rounded-lg p-4'>
-                        <p className='text-sm text-gray-600'>Total Gaji Bersih</p>
-                        <p className='text-2xl font-bold mt-2'>{formatCurrency(summary.total_gaji)}</p>
-                    </div>
-                    <div className='border rounded-lg p-4'>
-                        <p className='text-sm text-gray-600'>Total BPJS</p>
-                        <p className='text-2xl font-bold mt-2'>{formatCurrency(summary.total_bpjs)}</p>
-                    </div>
-                    <div className='border rounded-lg p-4'>
-                        <p className='text-sm text-gray-600'>Total Cashbon</p>
-                        <p className='text-2xl font-bold mt-2'>{formatCurrency(summary.total_cashbon)}</p>
-                    </div>
-                    <div className='border rounded-lg p-4'>
-                        <p className='text-sm text-gray-600'>Jumlah Karyawan</p>
-                        <p className='text-2xl font-bold mt-2'>{summary.karyawan_count}</p>
-                    </div>
-                </div>
-
-                {/* Detail Table */}
-                <div className='border rounded-lg p-4'>
-                    <h2 className='text-xl font-bold mb-4'>Detail Penggajian</h2>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>No</TableHead>
-                                <TableHead>Nama Karyawan</TableHead>
-                                <TableHead>Jabatan</TableHead>
-                                <TableHead className='text-right'>Gaji Pokok</TableHead>
-                                <TableHead className='text-right'>BPJS</TableHead>
-                                <TableHead className='text-right'>Cashbon</TableHead>
-                                <TableHead className='text-right'>Total Gaji</TableHead>
-                            </TableRow>
-                        </TableHeader>
-
-                        <TableBody>
-                            {penggajian.penggajianDetails && penggajian.penggajianDetails.length > 0 ? (
-                                <>
-                                    {penggajian.penggajianDetails.map((detail, index) => (
-                                        <TableRow key={detail.id}>
-                                            <TableCell>{index + 1}</TableCell>
-                                            <TableCell className='font-medium'>{detail.karyawan?.nama}</TableCell>
-                                            <TableCell>{detail.karyawan?.jabatan?.nama_jabatan || '-'}</TableCell>
-                                            <TableCell className='text-right'>{formatCurrency(detail.gaji_pokok)}</TableCell>
-                                            <TableCell className='text-right'>({formatCurrency(detail.bpjs)})</TableCell>
-                                            <TableCell className='text-right'>({formatCurrency(detail.potongan_cashbon)})</TableCell>
-                                            <TableCell className='text-right font-bold'>{formatCurrency(detail.total_gaji)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                    <TableRow className='bg-gray-50 font-bold'>
-                                        <TableCell colSpan={3}>TOTAL</TableCell>
-                                        <TableCell className='text-right'>{formatCurrency(summary.total_gaji + summary.total_bpjs + summary.total_cashbon)}</TableCell>
-                                        <TableCell className='text-right'>({formatCurrency(summary.total_bpjs)})</TableCell>
-                                        <TableCell className='text-right'>({formatCurrency(summary.total_cashbon)})</TableCell>
-                                        <TableCell className='text-right'>{formatCurrency(summary.total_gaji)}</TableCell>
-                                    </TableRow>
-                                </>
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title={`Penggajian ${periodeLabel(penggajian.periode)}`}
+                    description={`${kontrak.judul} · ${kontrak.client?.nama_client ?? ''}`}
+                    eyebrow={
+                        <span className="flex items-center gap-2">
+                            {dibayar ? (
+                                <StatusBadge tone="positive">Sudah dibayar</StatusBadge>
                             ) : (
-                                <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-8">
-                                        Belum ada data detail penggajian
-                                    </TableCell>
-                                </TableRow>
+                                <StatusBadge tone="warning">Belum dibayar</StatusBadge>
                             )}
-                        </TableBody>
-                    </Table>
+                            {penggajian.final ? <StatusBadge tone="outline">Periode terakhir</StatusBadge> : null}
+                        </span>
+                    }
+                    actions={
+                        !dibayar && hasAnyPermission(['penggajians update']) ? (
+                            <Button onClick={tandaiDibayar} disabled={paying} className="h-11 w-full sm:h-9 sm:w-auto">
+                                {paying ? 'Menyimpan…' : 'Tandai sudah dibayar'}
+                            </Button>
+                        ) : null
+                    }
+                />
+
+                {/* Keterangan periode */}
+                <div className="bg-card grid grid-cols-2 gap-px overflow-hidden rounded-lg border lg:grid-cols-4">
+                    <div className="bg-background flex flex-col gap-1 p-3.5">
+                        <span className="eyebrow">Cakupan kerja</span>
+                        <span className="num text-[13px]">
+                            {tanggalRingkas(penggajian.periode_mulai)} – {tanggal(penggajian.periode_selesai)}
+                        </span>
+                    </div>
+                    <div className="bg-background flex flex-col gap-1 p-3.5">
+                        <span className="eyebrow">Tanggal bayar</span>
+                        <span className="num text-[13px]">{tanggal(penggajian.tanggal_bayar)}</span>
+                    </div>
+                    <div className="bg-background flex flex-col gap-1 p-3.5">
+                        <span className="eyebrow">Karyawan</span>
+                        <span className="num text-[13px]">{angka(summary.karyawan_count)} orang</span>
+                    </div>
+                    <div className="bg-background flex flex-col gap-1 p-3.5">
+                        <span className="eyebrow">Total diterima</span>
+                        <span className="num text-[13px] font-medium">{rupiah(summary.total_gaji)}</span>
+                    </div>
                 </div>
 
-            </div>
-
-            {/* Status Update Dialog */}
-            <Dialog open={showStatusDialog} onOpenChange={setShowStatusDialog}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Ubah Status Penggajian</DialogTitle>
-                        <DialogDescription>
-                            Pilih status baru untuk penggajian periode {formatDate(penggajian.periode)}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className='space-y-4 py-4'>
-                        <Select value={newStatus} onValueChange={setNewStatus}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="belum_dibayar">Belum Dibayar</SelectItem>
-                                <SelectItem value="dibayar">Dibayar</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <div className='flex justify-end gap-2 pt-4'>
-                            <Button 
-                                variant='outline' 
-                                onClick={() => setShowStatusDialog(false)}
-                                disabled={isUpdating}
-                            >
-                                Batal
-                            </Button>
-                            <Button 
-                                onClick={handleStatusUpdate}
-                                disabled={isUpdating || newStatus === penggajian.status}
-                            >
-                                {isUpdating ? 'Updating...' : 'Simpan'}
-                            </Button>
-                        </div>
+                <section className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-1">
+                        <h2 className="text-lg font-semibold">Rincian per karyawan</h2>
+                        <p className="text-muted-foreground text-xs">
+                            Setiap angka menunjukkan asalnya — gaji penuh, hari aktif, tarif BPJS, dan cashbon yang
+                            memotongnya
+                        </p>
                     </div>
-                </DialogContent>
-            </Dialog>
 
+                    {details.length === 0 ? (
+                        <div className="bg-card rounded-lg border">
+                            <EmptyState
+                                icon={Users}
+                                title="Tidak ada karyawan pada periode ini"
+                                description="Belum ada pekerja yang penempatannya menyentuh rentang tanggal periode ini."
+                            />
+                        </div>
+                    ) : (
+                        <>
+                            {/* Tabel — 1024px ke atas */}
+                            <div className="bg-card hidden overflow-hidden rounded-lg border lg:block">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="bg-muted text-muted-foreground border-b text-[10.5px] font-semibold tracking-[0.09em] uppercase">
+                                            <th className="h-9 px-4 text-left">Karyawan</th>
+                                            <th className="h-9 w-28 px-4 text-left">Hari aktif</th>
+                                            <th className="h-9 px-4 text-right">Gaji pokok</th>
+                                            <th className="h-9 px-4 text-right">BPJS</th>
+                                            <th className="h-9 px-4 text-right">Potongan cashbon</th>
+                                            <th className="h-9 px-4 text-right">Diterima</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {details.map((detail, index) => (
+                                            <tr
+                                                key={detail.id}
+                                                className={`border-b align-top ${index % 2 === 1 ? 'bg-muted/45' : ''}`}
+                                            >
+                                                <td className="px-4 py-3.5">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="font-semibold">{detail.karyawan.nama}</span>
+                                                        <span className="text-muted-foreground text-xs">
+                                                            {detail.karyawan.jabatan?.nama_jabatan ?? '—'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="mt-2.5">
+                                                        <BukuBesar potongans={detail.potongans} />
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span
+                                                            className={`num ${
+                                                                detail.hari_aktif < detail.hari_periode
+                                                                    ? 'text-warn'
+                                                                    : ''
+                                                            }`}
+                                                        >
+                                                            {detail.hari_aktif} / {detail.hari_periode}
+                                                        </span>
+                                                        <span className="num text-muted-foreground/80 text-[11px]">
+                                                            {detail.hari_aktif < detail.hari_periode
+                                                                ? 'sebagian bulan'
+                                                                : 'bulan penuh'}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3.5 text-right">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="num">{rupiah(detail.gaji_pokok)}</span>
+                                                        <span className="num text-muted-foreground/80 text-[11px]">
+                                                            {rupiah(detail.gaji_pokok_penuh)} × {detail.hari_aktif}/
+                                                            {detail.hari_periode}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3.5 text-right">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="num text-crit">
+                                                            − {rupiah(detail.bpjs)}
+                                                        </span>
+                                                        <span className="num text-muted-foreground/80 text-[11px]">
+                                                            {angka(detail.bpjs_persen)}% dari gaji pokok
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3.5 text-right">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span
+                                                            className={`num ${detail.potongan_cashbon > 0 ? 'text-crit' : 'text-muted-foreground'}`}
+                                                        >
+                                                            {detail.potongan_cashbon > 0
+                                                                ? `− ${rupiah(detail.potongan_cashbon)}`
+                                                                : '—'}
+                                                        </span>
+                                                        <span className="num text-muted-foreground/80 text-[11px]">
+                                                            {detail.potongans.length > 0
+                                                                ? `${angka(detail.potongans.length)} cashbon`
+                                                                : 'tanpa cashbon'}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="num px-4 py-3.5 text-right font-medium">
+                                                    {rupiah(detail.total_gaji)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot className="border-foreground border-t-2">
+                                        <tr>
+                                            <td className="px-4 py-3.5 font-semibold">
+                                                Total {angka(summary.karyawan_count)} karyawan
+                                            </td>
+                                            <td />
+                                            <td className="num px-4 py-3.5 text-right font-medium">
+                                                {rupiah(totalGajiPokok)}
+                                            </td>
+                                            <td className="num px-4 py-3.5 text-right font-medium text-crit">
+                                                − {rupiah(summary.total_bpjs)}
+                                            </td>
+                                            <td className="num px-4 py-3.5 text-right font-medium text-crit">
+                                                − {rupiah(summary.total_cashbon)}
+                                            </td>
+                                            <td className="num px-4 py-3.5 text-right text-base font-medium">
+                                                {rupiah(summary.total_gaji)}
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+
+                            {/* Kartu slip — di bawah 1024px */}
+                            <div className="flex flex-col gap-3 lg:hidden">
+                                {details.map((detail) => (
+                                    <div key={detail.id} className="bg-card overflow-hidden rounded-lg border">
+                                        <div className="bg-muted flex flex-col gap-0.5 border-b p-3.5">
+                                            <span className="text-[15px] font-semibold">{detail.karyawan.nama}</span>
+                                            <span className="text-muted-foreground text-xs">
+                                                {detail.karyawan.jabatan?.nama_jabatan ?? '—'}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex flex-col gap-2.5 p-3.5">
+                                            <Baris
+                                                label="Gaji penuh jabatan"
+                                                value={rupiah(detail.gaji_pokok_penuh)}
+                                            />
+                                            <Baris
+                                                label="Hari aktif"
+                                                value={`${detail.hari_aktif} / ${detail.hari_periode}`}
+                                            />
+                                        </div>
+
+                                        <div className="flex flex-col gap-2.5 border-t p-3.5">
+                                            <Baris label="Gaji pokok" value={rupiah(detail.gaji_pokok)} strong />
+                                            <Baris
+                                                label={`BPJS · ${angka(detail.bpjs_persen)}%`}
+                                                value={`− ${rupiah(detail.bpjs)}`}
+                                                negative
+                                            />
+                                            {detail.potongan_cashbon > 0 ? (
+                                                <>
+                                                    <Baris
+                                                        label="Potongan cashbon"
+                                                        value={`− ${rupiah(detail.potongan_cashbon)}`}
+                                                        negative
+                                                    />
+                                                    <BukuBesar potongans={detail.potongans} />
+                                                </>
+                                            ) : null}
+                                        </div>
+
+                                        <div className="border-foreground flex items-baseline justify-between border-t-2 p-3.5">
+                                            <span className="text-sm font-semibold">Diterima</span>
+                                            <span className="num text-lg font-medium">{rupiah(detail.total_gaji)}</span>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                <div className="bg-foreground text-background flex flex-col gap-2.5 rounded-lg p-4">
+                                    <div className="flex items-baseline justify-between gap-3">
+                                        <span className="text-background/70 text-[13px]">
+                                            Gaji pokok {angka(summary.karyawan_count)} karyawan
+                                        </span>
+                                        <span className="num text-[13px]">{rupiah(totalGajiPokok)}</span>
+                                    </div>
+                                    <div className="flex items-baseline justify-between gap-3">
+                                        <span className="text-background/70 text-[13px]">BPJS</span>
+                                        <span className="num text-[13px]">− {rupiah(summary.total_bpjs)}</span>
+                                    </div>
+                                    <div className="flex items-baseline justify-between gap-3">
+                                        <span className="text-background/70 text-[13px]">Potongan cashbon</span>
+                                        <span className="num text-[13px]">− {rupiah(summary.total_cashbon)}</span>
+                                    </div>
+                                    <div className="bg-background/25 h-px" />
+                                    <div className="flex items-baseline justify-between gap-3">
+                                        <span className="text-sm font-semibold">Total dibayarkan</span>
+                                        <span className="num text-xl font-medium">{rupiah(summary.total_gaji)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {dibayar ? (
+                        <p className="text-muted-foreground flex items-start gap-2 text-xs leading-relaxed">
+                            <Lock className="text-primary mt-0.5 size-4 shrink-0" strokeWidth={1.8} />
+                            Penggajian yang sudah dibayar bersifat terkunci — nominal tidak dapat dihitung ulang dan
+                            alokasi cashbonnya tidak dapat dilepas.
+                        </p>
+                    ) : null}
+                </section>
+            </div>
         </AppLayout>
     );
 }

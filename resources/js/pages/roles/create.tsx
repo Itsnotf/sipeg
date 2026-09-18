@@ -1,105 +1,66 @@
-import { Button } from '@/components/ui/button';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, Form } from '@inertiajs/react';
-import { Input } from '@/components/ui/input';
-import { BreadcrumbItem } from '@/types';
-import InputError from '@/components/input-error';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Card } from '@/components/ui/card';
+import { Form, Head } from '@inertiajs/react';
 
-interface Permission {
-    id: number;
-    name: string;
-}
+import Field from '@/components/form/field';
+import FormActions from '@/components/form/form-actions';
+import PermissionPicker, { type IzinRingkas } from '@/components/form/permission-picker';
+import PageHeader from '@/components/page-header';
+import { Input } from '@/components/ui/input';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import roles, { store } from '@/routes/roles';
+import type { BreadcrumbItem } from '@/types';
 
 interface Props {
-    permissions: Permission[];
+    permissions: IzinRingkas[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Roles',
-        href: '/roles',
-    },
-    {
-        title: 'Create',
-        href: '/roles/create',
-    },
+    { title: 'Role', href: roles.index().url },
+    { title: 'Tambah', href: roles.create().url },
 ];
 
-export default function RoleCreatePage({ permissions }: Props) {
+export default function RoleCreate({ permissions }: Props) {
+    useFlashToast();
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Create Role" />
-            <Card className='m-4'>
-                <Form
-                    method="post"
-                    action="/roles"
-                    className="flex flex-col gap-6 p-4"
-                >
+            <Head title="Tambah role" />
+
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Tambah role"
+                    description="Izin yang dicentang menentukan menu apa yang terlihat dan tindakan apa yang boleh dilakukan"
+                />
+
+                <Form {...store.form()} disableWhileProcessing className="flex flex-col gap-5">
                     {({ processing, errors }) => (
                         <>
-                            <div className="grid gap-6">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="name">Role Name</Label>
-                                    <Input
-                                        id="name"
-                                        type="text"
-                                        required
-                                        autoFocus
-                                        name="name"
-                                        placeholder="Enter role name"
-                                    />
-                                    <InputError message={errors.name} />
-                                </div>
+                            <Field
+                                id="name"
+                                label="Nama role"
+                                error={errors.name}
+                                hint="Misalnya: admin, staf keuangan, supervisor"
+                                className="max-w-xl"
+                            >
+                                <Input
+                                    id="name"
+                                    name="name"
+                                    required
+                                    autoFocus
+                                    autoComplete="off"
+                                    className="h-12 sm:h-9"
+                                />
+                            </Field>
 
-                                <div className="grid gap-2">
-                                    <Label>Permissions</Label>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {permissions.map((permission) => (
-                                            <label
-                                                key={permission.id}
-                                                className="flex items-center space-x-3"
-                                            >
-                                                <Checkbox
-                                                    name="permissions[]"
-                                                    value={permission.name}
-                                                />
-                                                <span>{permission.name}</span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                    <InputError message={errors.permissions} />
-                                </div>
+                            <Field id="permissions" label="Izin" error={errors.permissions} opsional>
+                                <PermissionPicker permissions={permissions} />
+                            </Field>
 
-                                <div className="space-x-2">
-                                    <Button type="submit" className="mt-2 w-fit">
-                                        {processing ? (
-                                            <>
-                                                <Spinner className="mr-2" />
-                                                Creating...
-                                            </>
-                                        ) : (
-                                            'Create Role'
-                                        )}
-                                    </Button>
-                                    <Link href="/roles">
-                                        <Button
-                                            variant="outline"
-                                            type="button"
-                                            className="mt-2 w-fit"
-                                        >
-                                            Back
-                                        </Button>
-                                    </Link>
-                                </div>
-                            </div>
+                            <FormActions processing={processing} simpan="Simpan role" batalKe={roles.index().url} />
                         </>
                     )}
                 </Form>
-            </Card>
+            </div>
         </AppLayout>
     );
 }

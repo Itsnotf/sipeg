@@ -1,215 +1,196 @@
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, router, usePage } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
-import DeleteButton from '@/components/delete-button';
-import { Edit2Icon, FileTextIcon, PlusCircle, UserCheck, Eye, DollarSign } from 'lucide-react';
-import { BreadcrumbItem, Kontrak, SharedData, User } from '@/types';
-import { toast } from 'sonner';
-import users from '@/routes/users';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip"
-import hasAnyPermission from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
-import kontraks from '@/routes/kontraks';
+import { Head, Link, router } from '@inertiajs/react';
+import { DollarSign, Eye, FileText, PlusCircle, ScrollText, Search, SquarePen, Users } from 'lucide-react';
+import { useState } from 'react';
 
+import DataList, { type DataColumn } from '@/components/data-list';
+import DeleteButton from '@/components/delete-button';
+import EmptyState from '@/components/empty-state';
+import PageHeader from '@/components/page-header';
+import Pagination, { type Paginated } from '@/components/pagination';
+import StatusBadge from '@/components/status-badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import hasAnyPermission, { rupiah, tanggal, tanggalRingkas } from '@/lib/utils';
+import kontraks from '@/routes/kontraks';
+import type { BreadcrumbItem, Kontrak } from '@/types';
 
 interface Props {
-    kontraks: {
-        data: Kontrak[];
-        links: any[];
-    };
-    filters: {
-        search?: string;
-    };
-    flash?: {
-        success?: string;
-    };
+    kontraks: Paginated<Kontrak>;
+    filters: { search?: string };
 }
 
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Kontrak', href: kontraks.index().url }];
 
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Kontraks',
-        href: kontraks.index().url,
-    },
-];
+const nada: Record<string, 'positive' | 'warning' | 'outline'> = {
+    Progres: 'positive',
+    Pending: 'warning',
+    Selesai: 'outline',
+};
 
-export default function KontrakPage({ kontraks, filters, flash }: Props) {
-    const user = usePage<SharedData>().props.auth.user;
+export default function KontrakIndex({ kontraks: list, filters }: Props) {
+    useFlashToast();
+    const [search, setSearch] = useState(filters.search ?? '');
 
-    const [search, setSearch] = useState(filters.search || '');
-    const [shownMessages] = useState(new Set());
 
-    useEffect(() => {
-        if (flash?.success && !shownMessages.has(flash.success)) {
-            toast.success(flash.success);
-            shownMessages.add(flash.success);
-        }
-    }, [flash?.success]);
-
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        router.get('/kontraks', { search }, { preserveState: true });
-    };
+    const columns: DataColumn<Kontrak>[] = [
+        {
+            key: 'judul',
+            header: 'Kontrak',
+            primary: true,
+            cell: (row) => (
+                <div className="flex flex-col gap-0.5">
+                    <span className="font-semibold">{row.judul}</span>
+                    <span className="text-muted-foreground text-xs">{row.client?.nama_client ?? '—'}</span>
+                </div>
+            ),
+        },
+        {
+            key: 'rentang',
+            header: 'Rentang kontrak',
+            width: 'w-56',
+            cell: (row) => (
+                <span className="num text-muted-foreground text-[13px]">
+                    {tanggalRingkas(row.tanggal_mulai)} – {tanggal(row.tanggal_selesai)}
+                </span>
+            ),
+        },
+        {
+            key: 'gajian',
+            header: 'Tanggal gajian',
+            width: 'w-36',
+            cell: (row) => (
+                <span className="num text-muted-foreground text-[13px]">tiap tanggal {row.tanggal_gajian}</span>
+            ),
+        },
+        {
+            key: 'biaya',
+            header: 'Nilai kontrak',
+            className: 'text-right',
+            width: 'w-44',
+            cell: (row) => <span className="num text-sm">{rupiah(row.total_biaya)}</span>,
+        },
+        {
+            key: 'status',
+            header: 'Status',
+            badge: true,
+            width: 'w-32',
+            cell: (row) => (
+                <StatusBadge tone={nada[row.status as string] ?? 'neutral'}>{row.status}</StatusBadge>
+            ),
+        },
+    ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Kontraks" />
+            <Head title="Kontrak" />
 
-            <div className="p-4 space-y-4">
-
-                {/* Search Bar */}
-                <div className='flex space-x-1'>
-                    <form onSubmit={handleSearch} className="flex gap-2 w-full md:w-1/3">
-                        <Input
-                            placeholder="Search kontraks..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                        <Button variant='outline' type="submit">Search</Button>
-                    </form>
-                    {hasAnyPermission(["kontraks create"]) && (
-                        <Link href="/kontraks/create">
-                            <Button variant='default' className='group flex items-center'>
-                                <PlusCircle className='group-hover:rotate-90 transition-all' />
-                                Add Kontraks
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Kontrak"
+                    description="Perjanjian dengan klien beserta nilai dan jadwal penggajiannya"
+                    actions={
+                        hasAnyPermission(['kontraks create']) ? (
+                            <Button asChild className="h-11 w-full sm:h-9 sm:w-auto">
+                                <Link href={kontraks.create()}>
+                                    <PlusCircle />
+                                    Buat kontrak
+                                </Link>
                             </Button>
-                        </Link>
-                    )}
-                </div>
+                        ) : null
+                    }
+                />
 
-                {/* User Table */}
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Client</TableHead>
-                            <TableHead>Judul</TableHead>
-                            {/* <TableHead>Deskripsi</TableHead> */}
-                            <TableHead>Tanggal Mulai</TableHead>
-                            <TableHead>Tanggal Selesai</TableHead>
-                            <TableHead>Tanggal Gajian</TableHead>
-                            <TableHead>Total Biaya</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Action</TableHead>
-                        </TableRow>
-                    </TableHeader>
-
-                    <TableBody>
-                        {kontraks.data.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={8} className="h-[65vh]  text-center">
-                                    Belum Ada Data Kontraks.
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            kontraks.data.map((kontrak) => (
-                                <TableRow key={kontrak.id}>
-                                    <TableCell>{kontrak.client.nama_client}</TableCell>
-                                    <TableCell>{kontrak.judul}</TableCell>
-                                    {/* <TableCell>{kontrak.deskripsi}</TableCell> */}
-                                    <TableCell>{kontrak.tanggal_mulai}</TableCell>
-                                    <TableCell>{kontrak.tanggal_selesai}</TableCell>
-                                    <TableCell>{kontrak.tanggal_gajian}</TableCell>
-                                    <TableCell>Rp {parseInt(kontrak.total_biaya.toString()).toLocaleString('id-ID')}</TableCell>
-                                    <TableCell><Badge>{kontrak.status}</Badge></TableCell>
-
-                                    <TableCell className="space-x-2">
-                                        {hasAnyPermission(["kontraks index"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <Link href={`/kontraks/${kontrak.id}`}>
-                                                        <Button variant="outline" size="sm" className='hover:bg-green-200 hover:text-green-600'> <Eye /></Button>
-                                                    </Link>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Detail
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-                                        {hasAnyPermission(["kontraks edit"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <Link href={`/kontraks/${kontrak.id}/edit`}>
-                                                        <Button variant="outline" size="sm" className='hover:bg-blue-200 hover:text-blue-600'> <Edit2Icon /></Button>
-                                                    </Link>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Edit
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-                                        {hasAnyPermission(["kontraks dokumens index"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <Link href={`/kontraks/${kontrak.id}/dokumens`}>
-                                                        <Button variant="outline" size="sm" className='hover:bg-blue-200 hover:text-blue-600'> <FileTextIcon /></Button>
-                                                    </Link>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Dokumen
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-
-                                        {hasAnyPermission(["kontraks karyawans index"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <Link href={`/kontraks/${kontrak.id}/karyawans`}>
-                                                        <Button variant="outline" size="sm" className='hover:bg-blue-200 hover:text-blue-600'> <UserCheck /></Button>
-                                                    </Link>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Karyawan
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-
-                                        {hasAnyPermission(["penggajians index"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <Link href={`/kontraks/${kontrak.id}/penggajians`}>
-                                                        <Button variant="outline" size="sm" className='hover:bg-purple-200 hover:text-purple-600'> <DollarSign /></Button>
-                                                    </Link>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Penggajian
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-
-                                        {hasAnyPermission(["kontraks delete"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <DeleteButton id={kontrak.id} featured='kontraks' />
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Delete
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            )))}
-                    </TableBody>
-                </Table>
-
-                <div className="flex gap-1">
-                    {kontraks.links.map((link, i) => (
-                        <Link
-                            key={i}
-                            href={link.url ?? '#'}
-                            className={`px-3 py-1 flex justify-center items-center border rounded-md ${link.active ? 'bg-black text-white text-sm' : 'text-sm'}`}
-                            dangerouslySetInnerHTML={{ __html: link.label }}
+                <form
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        router.get(kontraks.index().url, { search }, { preserveState: true, replace: true });
+                    }}
+                    className="flex gap-2 sm:max-w-md"
+                >
+                    <div className="relative flex-1">
+                        <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                        <Input
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder="Cari judul atau deskripsi"
+                            className="h-11 pl-9 sm:h-9"
                         />
-                    ))}
-                </div>
+                    </div>
+                    <Button type="submit" variant="outline" className="h-11 sm:h-9">
+                        Cari
+                    </Button>
+                </form>
 
+                <DataList
+                    columns={columns}
+                    rows={list.data}
+                    rowKey={(row) => row.id}
+                    actions={(row) => (
+                        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:justify-end">
+                            <Button asChild variant="outline" size="sm" className="h-11 sm:h-8">
+                                <Link href={kontraks.show(row.id)}>
+                                    <Eye />
+                                    Detail
+                                </Link>
+                            </Button>
+                            {hasAnyPermission(['penggajians index']) && (
+                                <Button asChild variant="outline" size="sm" className="h-11 sm:h-8">
+                                    <Link href={kontraks.penggajians.index(row.id)}>
+                                        <DollarSign />
+                                        Gaji
+                                    </Link>
+                                </Button>
+                            )}
+                            {hasAnyPermission(['kontraks karyawans index']) && (
+                                <Button asChild variant="outline" size="sm" className="h-11 sm:h-8">
+                                    <Link href={kontraks.karyawans.index(row.id)}>
+                                        <Users />
+                                        Pekerja
+                                    </Link>
+                                </Button>
+                            )}
+                            {hasAnyPermission(['kontraks dokumens index']) && (
+                                <Button asChild variant="outline" size="sm" className="h-11 sm:h-8">
+                                    <Link href={kontraks.dokumens.index(row.id)}>
+                                        <FileText />
+                                        Dokumen
+                                    </Link>
+                                </Button>
+                            )}
+                            {hasAnyPermission(['kontraks edit']) && (
+                                <Button asChild variant="outline" size="sm" className="h-11 sm:h-8">
+                                    <Link href={kontraks.edit(row.id)}>
+                                        <SquarePen />
+                                        Ubah
+                                    </Link>
+                                </Button>
+                            )}
+                            {hasAnyPermission(['kontraks delete']) && <DeleteButton id={row.id} featured="kontraks" />}
+                        </div>
+                    )}
+                    empty={
+                        <EmptyState
+                            icon={ScrollText}
+                            title={filters.search ? 'Tidak ada kontrak yang cocok' : 'Belum ada kontrak'}
+                            description={
+                                filters.search
+                                    ? 'Coba kata kunci lain, atau kosongkan pencarian untuk melihat semuanya.'
+                                    : 'Kontrak menentukan jadwal penggajian — buat satu untuk mulai memproses gaji.'
+                            }
+                            action={
+                                !filters.search && hasAnyPermission(['kontraks create']) ? (
+                                    <Button asChild>
+                                        <Link href={kontraks.create()}>Buat kontrak pertama</Link>
+                                    </Button>
+                                ) : null
+                            }
+                        />
+                    }
+                />
+
+                <Pagination meta={list} noun="kontrak" />
             </div>
         </AppLayout>
     );

@@ -1,159 +1,146 @@
-import { Button } from '@/components/ui/button';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, router, Form } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
+import { useState } from 'react';
+
+import Field from '@/components/form/field';
+import FormActions from '@/components/form/form-actions';
+import PasswordInput from '@/components/form/password-input';
+import PageHeader from '@/components/page-header';
 import { Input } from '@/components/ui/input';
-import users, { store } from '@/routes/users';
-import { BreadcrumbItem } from '@/types';
-
-import InputError from '@/components/input-error';
-import TextLink from '@/components/text-link';
-
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/components/ui/select";
-
+} from '@/components/ui/select';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import users, { store } from '@/routes/users';
+import type { BreadcrumbItem, Role } from '@/types';
 
 interface Props {
-    roles: {
-        id: number;
-        name: string;
-    }[];
+    roles: Role[];
 }
 
-
 const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Users',
-        href: users.index().url,
-    },
-    {
-        title: 'Create',
-        href: users.create().url,
-    },
+    { title: 'Pengguna', href: users.index().url },
+    { title: 'Tambah', href: users.create().url },
 ];
 
-export default function UserCreatePage({ roles }: Props) {
+export default function UserCreate({ roles }: Props) {
+    useFlashToast();
 
+    const [role, setRole] = useState('');
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Users" />
-            <Form
-                {...store.form()}
-                resetOnSuccess={['password', 'password_confirmation']}
-                disableWhileProcessing
-                className="flex flex-col gap-6 p-4"
-            >
-                {({ processing, errors }) => (
-                    <>
-                        <div className="grid gap-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
+            <Head title="Tambah pengguna" />
+
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Tambah pengguna"
+                    description="Role menentukan menu dan tindakan yang dapat diakses pengguna ini"
+                />
+
+                <Form
+                    {...store.form()}
+                    resetOnSuccess={['password', 'password_confirmation']}
+                    disableWhileProcessing
+                    className="flex max-w-xl flex-col gap-5"
+                >
+                    {({ processing, errors }) => (
+                        <>
+                            <input type="hidden" name="role" value={role} />
+
+                            <Field id="name" label="Nama" error={errors.name}>
                                 <Input
                                     id="name"
-                                    type="text"
+                                    name="name"
                                     required
                                     autoFocus
-                                    tabIndex={1}
                                     autoComplete="name"
-                                    name="name"
-                                    placeholder="Full name"
+                                    className="h-12 sm:h-9"
                                 />
-                                <InputError
-                                    message={errors.name}
-                                    className="mt-2"
-                                />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
+                            <Field
+                                id="email"
+                                label="Email"
+                                error={errors.email}
+                                hint="Dipakai untuk masuk ke sistem"
+                            >
                                 <Input
                                     id="email"
+                                    name="email"
                                     type="email"
                                     required
-                                    tabIndex={2}
                                     autoComplete="email"
-                                    name="email"
-                                    placeholder="email@example.com"
+                                    placeholder="nama@perusahaan.co.id"
+                                    className="h-12 sm:h-9"
                                 />
-                                <InputError message={errors.email} />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="password">Password</Label>
-                                <Input
+                            <Field
+                                id="password"
+                                label="Kata sandi"
+                                error={errors.password}
+                                hint="Minimal 8 karakter"
+                            >
+                                <PasswordInput
                                     id="password"
-                                    type="password"
-                                    required
-                                    tabIndex={3}
-                                    autoComplete="new-password"
                                     name="password"
-                                    placeholder="Password"
-                                />
-                                <InputError message={errors.password} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="password_confirmation">
-                                    Confirm password
-                                </Label>
-                                <Input
-                                    id="password_confirmation"
-                                    type="password"
                                     required
-                                    tabIndex={4}
+                                    minLength={8}
                                     autoComplete="new-password"
+                                    className="h-12 sm:h-9"
+                                />
+                            </Field>
+
+                            <Field
+                                id="password_confirmation"
+                                label="Ulangi kata sandi"
+                                error={errors.password_confirmation}
+                            >
+                                <PasswordInput
+                                    id="password_confirmation"
                                     name="password_confirmation"
-                                    placeholder="Confirm password"
+                                    required
+                                    minLength={8}
+                                    autoComplete="new-password"
+                                    className="h-12 sm:h-9"
                                 />
-                                <InputError
-                                    message={errors.password_confirmation}
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="role">Role</Label>
-                                <Select name="role" required>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select a role" />
+                            </Field>
+
+                            <Field id="role" label="Role" error={errors.role}>
+                                <Select value={role} onValueChange={setRole}>
+                                    <SelectTrigger
+                                        id="role"
+                                        className="h-12 sm:h-9"
+                                    >
+                                        <SelectValue placeholder="Pilih role" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {roles.map((role) => (
-                                            <SelectItem key={role.id} value={role.name}>
-                                                {role.name}
+                                        {roles.map((r) => (
+                                            <SelectItem
+                                                key={r.id}
+                                                value={r.name}
+                                            >
+                                                {r.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <InputError message={errors.role} />
-                            </div>
+                            </Field>
 
-                            <div className='space-x-2'>
-                                <Button type="submit" className="mt-2 w-fit">
-                                    {processing ? (
-                                        <>
-                                            <Spinner className="mr-2" />    
-                                            Creating...
-                                        </>
-                                    ) : (
-                                        'Create account'
-                                    )}
-                                </Button>
-                                <Link href={'/users'}>
-                                    <Button variant='outline' type="button" className="mt-2 w-fit">
-                                        Back
-                                    </Button>
-                                </Link>
-                            </div>
-                        </div>
-                    </>
-                )}
-            </Form>
+                            <FormActions
+                                processing={processing}
+                                simpan="Simpan pengguna"
+                                batalKe={users.index().url}
+                            />
+                        </>
+                    )}
+                </Form>
+            </div>
         </AppLayout>
     );
 }

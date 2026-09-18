@@ -9,21 +9,21 @@ use App\Models\KontrakDokumen;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
 
 class KontrakDokumenController extends Controller implements HasMiddleware
 {
-
-     public static function middleware()
+    public static function middleware()
     {
         return [
             new Middleware('permission:kontraks dokumens index', only: ['index']),
             new Middleware('permission:kontraks dokumens create', only: ['create', 'store']),
-            new Middleware('permission:kontraks dokumens edit', only: ['edit', 'update   ']),
+            new Middleware('permission:kontraks dokumens edit', only: ['edit', 'update']),
             new Middleware('permission:kontraks dokumens delete', only: ['destroy']),
         ];
     }
+
     /**
      * Display a listing of the resource.
      */
@@ -35,15 +35,22 @@ class KontrakDokumenController extends Controller implements HasMiddleware
         })
             ->where('kontrak_id', $kontrak_id)
             ->paginate(8)
-            ->withQueryString();
+            ->withQueryString()
+            ->through(fn (KontrakDokumen $dokumen): array => [
+                'id' => $dokumen->id,
+                'kontrak_id' => $dokumen->kontrak_id,
+                'nama_dokumen' => $dokumen->nama_dokumen,
+                'file' => $dokumen->file,
+                'diunggah' => $dokumen->created_at?->format('Y-m-d'),
+            ]);
+
+        $kontrak = Kontrak::findOrFail($kontrak_id);
 
         return inertia('kontraks/dokumens/index', [
             'dokumens' => $dokumens,
             'kontrak_id' => $kontrak_id,
+            'kontrak' => ['id' => $kontrak->id, 'judul' => $kontrak->judul],
             'filters' => $request->only('search'),
-            'flash' => [
-                'success' => session('success'),
-            ],
         ]);
     }
 
@@ -62,26 +69,18 @@ class KontrakDokumenController extends Controller implements HasMiddleware
      */
     public function store(string $kontrak_id, StoreRequest $request)
     {
-        $kontrak = Kontrak::find($kontrak_id);
+        $kontrak = Kontrak::findOrFail($kontrak_id);
         $validated = $request->validated();
 
-        if ($request->hasFile('file')) {
-            $file = $request->file('file');
+        $file = $request->file('file');
 
-            $filename = time() . '_' . $file->getClientOriginalName();
+        $validated['file'] = $file->storeAs(
+            "dokumens/kontrak-{$kontrak->id}",
+            time().'_'.$file->getClientOriginalName(),
+            'public'
+        );
+        $validated['kontrak_id'] = $kontrak->id;
 
-            $filePath = $file->storeAs(
-                "dokumens/kontrak-{$kontrak_id}",
-                $filename,
-                'public'
-            );
-        }
-
-        // Tambahkan path file ke validated data
-        $validated['file'] = $filePath;
-        $validated['kontrak_id'] = $kontrak_id;
-
-        // Buat record di database
         KontrakDokumen::create($validated);
 
         return redirect()->route('kontraks.dokumens.index', $kontrak_id)->with('success', 'Dokumen berhasil disimpan.');
@@ -92,7 +91,10 @@ class KontrakDokumenController extends Controller implements HasMiddleware
      */
     public function edit(string $kontrak_id, string $dokumen_id)
     {
-        $dokumen = KontrakDokumen::find($dokumen_id);
+        // findOrFail, bukan find: id yang tidak ada sebelumnya melanjutkan
+        // dengan null dan berujung galat properti pada objek null.
+        $dokumen = KontrakDokumen::where('kontrak_id', $kontrak_id)->findOrFail($dokumen_id);
+
         return Inertia::render('kontraks/dokumens/edit', [
             'dokumen' => $dokumen,
             'kontrak_id' => $kontrak_id,
@@ -104,30 +106,31 @@ class KontrakDokumenController extends Controller implements HasMiddleware
      */
     public function update(string $kontrak_id, string $dokumen_id, UpdateRequest $request)
     {
-        $dokumen = KontrakDokumen::find($dokumen_id);
+        $dokumen = KontrakDokumen::where('kontrak_id', $kontrak_id)->findOrFail($dokumen_id);
         $validated = $request->validated();
 
-        // Jika ada file baru yang diupload
+        // Bidang berkas yang dikirim kosong tetap hadir sebagai null pada
+        // kiriman multipart. Dibiarkan lewat, null itu akan menimpa path berkas
+        // yang sudah ada dan dokumennya kehilangan lampiran.
+        unset($validated['file']);
+
         if ($request->hasFile('file')) {
             $file = $request->file('file');
+            $berkasLama = $dokumen->file;
 
-            // Hapus file lama dari storage
-            if ($dokumen->file) {
-                Storage::disk('public')->delete($dokumen->file);
-            }
-
-            // Simpan file baru
-            $filename = time() . '_' . $file->getClientOriginalName();
-            $filePath = $file->storeAs(
+            // Berkas baru disimpan lebih dahulu; berkas lama baru dibuang
+            // setelah penggantinya benar-benar ada.
+            $validated['file'] = $file->storeAs(
                 "dokumens/kontrak-{$kontrak_id}",
-                $filename,
+                time().'_'.$file->getClientOriginalName(),
                 'public'
             );
 
-            $validated['file'] = $filePath;
+            if ($berkasLama) {
+                Storage::disk('public')->delete($berkasLama);
+            }
         }
 
-        // Update hanya field yang dikirim
         $dokumen->update($validated);
 
         return redirect()->route('kontraks.dokumens.index', $kontrak_id)->with('success', 'Dokumen berhasil diperbarui.');
@@ -138,14 +141,10 @@ class KontrakDokumenController extends Controller implements HasMiddleware
      */
     public function destroy(string $kontrak_id, string $dokumen_id)
     {
-        $dokumen = KontrakDokumen::find($dokumen_id);
-        if ($dokumen) {
-            // Hapus file dari storage
-            Storage::disk('public')->delete($dokumen->file);
+        $dokumen = KontrakDokumen::where('kontrak_id', $kontrak_id)->findOrFail($dokumen_id);
 
-            // Hapus record dari database
-            $dokumen->delete();
-        }
+        Storage::disk('public')->delete($dokumen->file);
+        $dokumen->delete();
 
         return redirect()->route('kontraks.dokumens.index', $kontrak_id)->with('success', 'Dokumen berhasil dihapus.');
     }

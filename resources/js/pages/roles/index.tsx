@@ -1,147 +1,124 @@
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, router } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
-import { Edit2Icon, PlusCircle } from 'lucide-react';
-import { BreadcrumbItem, Role } from '@/types';
-import { toast } from 'sonner';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip"
-import hasAnyPermission from '@/lib/utils';
-import DeleteButton from '@/components/delete-button';
-import { Card } from '@/components/ui/card';
+import { Head, Link, router } from '@inertiajs/react';
+import { KeyRound, PlusCircle, Search, SquarePen } from 'lucide-react';
+import { useState } from 'react';
 
-interface Props {
-    roles: {
-        data: Role[];
-        links: any[];
-    };
-    filters: {
-        search?: string;
-    };
-    flash?: {
-        success?: string;
-    };
+import DataList, { type DataColumn } from '@/components/data-list';
+import DeleteButton from '@/components/delete-button';
+import EmptyState from '@/components/empty-state';
+import PageHeader from '@/components/page-header';
+import Pagination, { type Paginated } from '@/components/pagination';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import hasAnyPermission, { angka } from '@/lib/utils';
+import roles from '@/routes/roles';
+import type { BreadcrumbItem } from '@/types';
+
+interface RoleRow {
+    id: number;
+    name: string;
+    permissions?: { id: number; name: string }[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Roles',
-        href: '/roles',
-    },
-];
+interface Props {
+    roles: Paginated<RoleRow>;
+    filters: { search?: string };
+}
 
-export default function RolePage({ roles, filters, flash }: Props) {
-    const [search, setSearch] = useState(filters.search || '');
-    const [shownMessages] = useState(new Set());
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Roles', href: roles.index().url }];
 
-    useEffect(() => {
-        if (flash?.success && !shownMessages.has(flash.success)) {
-            toast.success(flash.success);
-            shownMessages.add(flash.success);
-        }
-    }, [flash?.success]);
-
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        router.get('/roles', { search }, { preserveState: true });
-    };
+export default function RoleIndex({ roles: list, filters }: Props) {
+    useFlashToast();
+    const [search, setSearch] = useState(filters.search ?? '');
 
 
+    const columns: DataColumn<RoleRow>[] = [
+        {
+            key: 'nama',
+            header: 'Peran',
+            primary: true,
+            cell: (row) => <span className="font-semibold">{row.name}</span>,
+        },
+        {
+            key: 'izin',
+            header: 'Izin',
+            cell: (row) => (
+                <span className="num text-muted-foreground text-[13px]">
+                    {angka((row.permissions ?? []).length)} izin
+                </span>
+            ),
+        },
+    ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Roles" />
 
-            <div className="p-4 space-y-4">
-                {/* Search Bar */}
-                <div className='flex space-x-1'>
-                    <form onSubmit={handleSearch} className="flex gap-2 w-full md:w-1/3">
-                        <Input
-                            placeholder="Search roles..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                        <Button variant='outline' type="submit">Search</Button>
-                    </form>
-                    {hasAnyPermission(["roles create"]) && (
-                        <Link href="/roles/create">
-                            <Button variant='default' className='group flex items-center'>
-                                <PlusCircle className='group-hover:rotate-90 transition-all' />
-                                Add Role
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Roles"
+                    description="Peran menentukan halaman dan aksi mana yang boleh diakses seorang user"
+                    actions={
+                        hasAnyPermission(['roles create']) ? (
+                            <Button asChild className="h-11 w-full sm:h-9 sm:w-auto">
+                                <Link href={roles.create()}>
+                                    <PlusCircle />
+                                    Tambah peran
+                                </Link>
                             </Button>
-                        </Link>
-                    )}
-                </div>
+                        ) : null
+                    }
+                />
 
-                {/* Role Table */}
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className='md:min-w-96 min-w-52'>Name</TableHead>
-                            <TableHead>Action</TableHead>
-                        </TableRow>
-                    </TableHeader>
-
-                    <TableBody>
-                        {roles.data.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={8} className="h-[65vh]  text-center">
-                                    Belum Ada Data Role.
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            roles.data.map((role) => (
-                                <TableRow key={role.id}>
-                                    <TableCell>{role.name}</TableCell>
-                                    <TableCell className="space-x-2">
-                                        {hasAnyPermission(["roles edit"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <Link href={`/roles/${role.id}/edit`}>
-                                                        <Button variant="outline" size="sm" className='hover:bg-blue-200 hover:text-blue-600'>
-                                                            <Edit2Icon />
-                                                        </Button>
-                                                    </Link>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Edit
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-
-                                        {hasAnyPermission(["roles delete"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <DeleteButton id={role.id} featured="roles" />
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Delete
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            )))}
-                    </TableBody>
-                </Table>
-
-                {/* Pagination */}
-                <div className="flex gap-1">
-                    {roles.links.map((link, i) => (
-                        <Link
-                            key={i}
-                            href={link.url ?? '#'}
-                            className={`px-3 py-1 flex justify-center items-center border rounded-md ${link.active ? 'bg-black text-white text-sm' : 'text-sm'}`}
-                            dangerouslySetInnerHTML={{ __html: link.label }}
+                <form
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        router.get(roles.index().url, { search }, { preserveState: true, replace: true });
+                    }}
+                    className="flex gap-2 sm:max-w-md"
+                >
+                    <div className="relative flex-1">
+                        <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                        <Input
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder="Cari nama peran"
+                            className="h-11 pl-9 sm:h-9"
                         />
-                    ))}
-                </div>
+                    </div>
+                    <Button type="submit" variant="outline" className="h-11 sm:h-9">
+                        Cari
+                    </Button>
+                </form>
+
+                <DataList
+                    columns={columns}
+                    rows={list.data}
+                    rowKey={(row) => row.id}
+                    actions={(row) => (
+                        <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+                            {hasAnyPermission(['roles edit']) && (
+                                <Button asChild variant="outline" size="sm" className="h-11 flex-1 sm:h-8 sm:flex-none">
+                                    <Link href={roles.edit(row.id)}>
+                                        <SquarePen />
+                                        Ubah
+                                    </Link>
+                                </Button>
+                            )}
+                            {hasAnyPermission(['roles delete']) && <DeleteButton id={row.id} featured="roles" />}
+                        </div>
+                    )}
+                    empty={
+                        <EmptyState
+                            icon={KeyRound}
+                            title={filters.search ? 'Tidak ada peran yang cocok' : 'Belum ada peran'}
+                            description="Peran mengelompokkan izin, lalu diberikan kepada user."
+                        />
+                    }
+                />
+
+                <Pagination meta={list} noun="peran" />
             </div>
         </AppLayout>
     );

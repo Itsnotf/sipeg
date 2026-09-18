@@ -43,17 +43,28 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                // Kabar netral, mis. "tidak ada periode baru yang jatuh tempo"
+                'info' => fn () => $request->session()->get('info'),
             ],
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
-                'user' => $request->user(),
-                'permissions' => $request->user() ? $request->user()->getAllPermissions()->map(fn($permission) => [
+                // Bidang yang benar-benar dipakai layar saja. Model utuh ikut
+                // membawa created_at/updated_at berupa Carbon yang tersaji
+                // mentah dalam UTC di setiap muatan halaman.
+                'user' => $request->user() ? [
+                    'id' => $request->user()->id,
+                    'name' => $request->user()->name,
+                    'email' => $request->user()->email,
+                    'avatar' => $request->user()->avatar,
+                    'email_verified_at' => $request->user()->email_verified_at?->format('Y-m-d'),
+                ] : null,
+                // Hanya id dan nama: frontend hanya mencocokkan nama izin, dan
+                // stempel waktu Carbon di sini akan terserialisasi mentah ke UTC
+                // pada setiap muatan halaman.
+                'permissions' => $request->user() ? $request->user()->getAllPermissions()->map(fn ($permission) => [
                     'id' => $permission->id,
                     'name' => $permission->name,
-                    'guard_name' => $permission->guard_name,
-                    'created_at' => $permission->created_at,
-                    'updated_at' => $permission->updated_at,
                 ]) : [],
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',

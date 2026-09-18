@@ -1,157 +1,166 @@
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, router, usePage } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
+import { Head, Link, router } from '@inertiajs/react';
+import { PlusCircle, Search, SquarePen, UserRound } from 'lucide-react';
+import { useState } from 'react';
+
+import DataList, { type DataColumn } from '@/components/data-list';
 import DeleteButton from '@/components/delete-button';
-import { Edit2Icon, PlusCircle } from 'lucide-react';
-import { BreadcrumbItem, SharedData, User } from '@/types';
-import { toast } from 'sonner';
-import users from '@/routes/users';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip"
+import EmptyState from '@/components/empty-state';
+import PageHeader from '@/components/page-header';
+import Pagination, { type Paginated } from '@/components/pagination';
+import StatusBadge from '@/components/status-badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
 import hasAnyPermission from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
+import users from '@/routes/users';
+import type { BreadcrumbItem } from '@/types';
 
-
-interface Props {
-    users: {
-        data: User[];
-        links: any[];
-    };
-    filters: {
-        search?: string;
-    };
-    flash?: {
-        success?: string;
-    };
+interface UserRow {
+    id: number;
+    name: string;
+    email: string;
+    roles?: { id: number; name: string }[];
 }
 
+interface Props {
+    users: Paginated<UserRow>;
+    filters: { search?: string };
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Users',
-        href: users.index().url,
-    },
+    { title: 'Users', href: users.index().url },
 ];
 
-export default function UserPage({ users, filters, flash }: Props) {
-    const user = usePage<SharedData>().props.auth.user;
+export default function UserIndex({ users: list, filters }: Props) {
+    useFlashToast();
+    const [search, setSearch] = useState(filters.search ?? '');
 
-    const [search, setSearch] = useState(filters.search || '');
-    const [shownMessages] = useState(new Set());
-
-    useEffect(() => {
-        if (flash?.success && !shownMessages.has(flash.success)) {
-            toast.success(flash.success);
-            shownMessages.add(flash.success);
-        }
-    }, [flash?.success]);
-
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        router.get('/users', { search }, { preserveState: true });
-    };
+    const columns: DataColumn<UserRow>[] = [
+        {
+            key: 'nama',
+            header: 'Nama',
+            primary: true,
+            cell: (row) => (
+                <div className="flex flex-col gap-0.5">
+                    <span className="font-semibold">{row.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                        {row.email}
+                    </span>
+                </div>
+            ),
+        },
+        {
+            key: 'peran',
+            header: 'Peran',
+            cell: (row) => (
+                <div className="flex flex-wrap justify-end gap-1.5 sm:justify-start">
+                    {(row.roles ?? []).length === 0 ? (
+                        <span className="text-[13px] text-muted-foreground">
+                            —
+                        </span>
+                    ) : (
+                        (row.roles ?? []).map((role) => (
+                            <StatusBadge key={role.id} tone="neutral">
+                                {role.name}
+                            </StatusBadge>
+                        ))
+                    )}
+                </div>
+            ),
+        },
+    ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Users" />
 
-            <div className="p-4 space-y-4">
-
-                {/* Search Bar */}
-                <div className='flex space-x-1'>
-                    <form onSubmit={handleSearch} className="flex gap-2 w-full md:w-1/3">
-                        <Input
-                            placeholder="Search users..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                        <Button variant='outline' type="submit">Search</Button>
-                    </form>
-                    {hasAnyPermission(["users create"]) && (
-                        <Link href="/users/create">
-                            <Button variant='default' className='group flex items-center'>
-                                <PlusCircle className='group-hover:rotate-90 transition-all' />
-                                Add Users
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Users"
+                    description="Akun yang dapat masuk ke sistem beserta perannya"
+                    actions={
+                        hasAnyPermission(['users create']) ? (
+                            <Button
+                                asChild
+                                className="h-11 w-full sm:h-9 sm:w-auto"
+                            >
+                                <Link href={users.create()}>
+                                    <PlusCircle />
+                                    Tambah user
+                                </Link>
                             </Button>
-                        </Link>
-                    )}
-                </div>
+                        ) : null
+                    }
+                />
 
-                {/* User Table */}
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Email</TableHead>
-                            <TableHead>Role</TableHead>
-                            <TableHead>Action</TableHead>
-                        </TableRow>
-                    </TableHeader>
-
-                    <TableBody>
-                        {users.data.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={8} className="h-[65vh]  text-center">
-                                    Belum Ada Data Perusahaan.
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            users.data.map((user) => (
-                                <TableRow key={user.id}>
-                                    <TableCell>{user.name}</TableCell>
-                                    <TableCell>{user.email}</TableCell>
-                                    <TableCell>
-                                        {Array.isArray(user.roles) && user.roles.map((role, i) => (
-                                            <Badge key={i} className="mr-1">{role.name}</Badge>
-                                        ))}
-                                    </TableCell>
-                                    <TableCell className="space-x-2">
-                                        {hasAnyPermission(["users edit"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <Link href={`/users/${user.id}/edit`}>
-                                                        <Button variant="outline" size="sm" className='hover:bg-blue-200 hover:text-blue-600'> <Edit2Icon /></Button>
-                                                    </Link>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Edit
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-
-                                        {hasAnyPermission(["users delete"]) && (
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <DeleteButton id={user.id} featured='users' />
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    Delete
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            )))}
-                    </TableBody>
-                </Table>
-
-                <div className="flex gap-1">
-                    {users.links.map((link, i) => (
-                        <Link
-                            key={i}
-                            href={link.url ?? '#'}
-                            className={`px-3 py-1 flex justify-center items-center border rounded-md ${link.active ? 'bg-black text-white text-sm' : 'text-sm'}`}
-                            dangerouslySetInnerHTML={{ __html: link.label }}
+                <form
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        router.get(
+                            users.index().url,
+                            { search },
+                            { preserveState: true, replace: true },
+                        );
+                    }}
+                    className="flex gap-2 sm:max-w-md"
+                >
+                    <div className="relative flex-1">
+                        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder="Cari nama atau email"
+                            className="h-11 pl-9 sm:h-9"
                         />
-                    ))}
-                </div>
+                    </div>
+                    <Button
+                        type="submit"
+                        variant="outline"
+                        className="h-11 sm:h-9"
+                    >
+                        Cari
+                    </Button>
+                </form>
 
+                <DataList
+                    columns={columns}
+                    rows={list.data}
+                    rowKey={(row) => row.id}
+                    actions={(row) => (
+                        <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+                            {hasAnyPermission(['users edit']) && (
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-11 flex-1 sm:h-8 sm:flex-none"
+                                >
+                                    <Link href={users.edit(row.id)}>
+                                        <SquarePen />
+                                        Ubah
+                                    </Link>
+                                </Button>
+                            )}
+                            {hasAnyPermission(['users delete']) && (
+                                <DeleteButton id={row.id} featured="users" />
+                            )}
+                        </div>
+                    )}
+                    empty={
+                        <EmptyState
+                            icon={UserRound}
+                            title={
+                                filters.search
+                                    ? 'Tidak ada user yang cocok'
+                                    : 'Belum ada user'
+                            }
+                            description="User adalah akun yang dapat masuk ke sistem. Perannya menentukan apa yang boleh diaksesnya."
+                        />
+                    }
+                />
+
+                <Pagination meta={list} noun="user" />
             </div>
         </AppLayout>
     );

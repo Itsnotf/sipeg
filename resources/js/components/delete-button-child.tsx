@@ -1,54 +1,28 @@
-import { Button } from '@/components/ui/button';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { router } from '@inertiajs/react';
-import { toast } from 'sonner';
-import { Trash } from 'lucide-react';
+import ConfirmDelete from '@/components/confirm-delete';
+import { LABEL_SUMBER_DAYA } from '@/components/delete-button';
 
-export default function DeleteButtonChild({ id, featured, child, child_id}: { id: number , featured: string, child: string, child_id: number}) {
-    const handleDelete = () => {
-        const deletes = new Promise((resolve, reject) => {
-            router.delete(`/${featured}/${id}/${child}/${child_id}`, {
-                onSuccess: () => resolve(true),
-                onError: () => reject(false),
-            });
-        });
+interface DeleteButtonChildProps {
+    /** Id induk, mis. id kontrak. */
+    id: number;
+    /** Segmen rute induk, mis. "kontraks". */
+    featured: string;
+    /** Segmen rute anak, mis. "dokumens". */
+    child: string;
+    /** Id baris anak yang dihapus. */
+    child_id: number;
+    /** Nama baris, ditampilkan di dialog konfirmasi. */
+    nama?: string;
+    /** Menimpa kata benda di dialog, mis. "penempatan" untuk kontraks/karyawans. */
+    jenis?: string;
+}
 
-        toast.promise(deletes, {
-            loading: `Deleting ${child}...`,
-            success: `${child.charAt(0).toUpperCase() + child.slice(1)} deleted successfully`,
-            error: `Failed to delete ${child}`,
-        });
-    };
-
+/** Tombol hapus untuk sumber daya bersarang: /{featured}/{id}/{child}/{child_id}. */
+export default function DeleteButtonChild({ id, featured, child, child_id, nama, jenis }: DeleteButtonChildProps) {
     return (
-        <AlertDialog>
-            <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" className="hover:bg-red-200 hover:text-red-600"><Trash/></Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete the {featured}.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction asChild>
-                        <Button variant="destructive" onClick={handleDelete}>Continue</Button>
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+        <ConfirmDelete
+            url={`/${featured}/${id}/${child}/${child_id}`}
+            jenis={jenis ?? LABEL_SUMBER_DAYA[child] ?? child}
+            nama={nama}
+        />
     );
 }

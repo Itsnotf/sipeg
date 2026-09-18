@@ -22,7 +22,7 @@ class UpdateStatusRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => 'required|in:belum_dibayar,dibayar',
+            'status' => ['required', 'in:dibayar'],
         ];
     }
 
@@ -33,7 +33,7 @@ class UpdateStatusRequest extends FormRequest
     {
         return [
             'status.required' => 'Status penggajian harus diisi.',
-            'status.in' => 'Status penggajian harus belum_dibayar atau dibayar.',
+            'status.in' => 'Penggajian hanya dapat ditandai sudah dibayar. Pembayaran tidak dapat dibatalkan.',
         ];
     }
 }

@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CashbonController;
+use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\JabatanController;
 use App\Http\Controllers\KaryawanController;
@@ -12,29 +12,36 @@ use App\Http\Controllers\PenggajianController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
-use Laravel\Fortify\Features;
 
-Route::get('/', function () {
-    return Inertia::render('welcome', [
-        'canRegister' => Features::enabled(Features::registration()),
-    ]);
-})->name('home');
+/*
+| Akar situs mengarah ke halaman masuk.
+|
+| SIPEG adalah aplikasi internal — tidak ada yang bisa dikerjakan tanpa akun,
+| sehingga halaman sambutan hanya menjadi satu ketukan tambahan sebelum masuk.
+| Nama rute 'home' dipertahankan karena Fortify memakainya sebagai tujuan
+| setelah akun dihapus.
+|
+| Pengguna yang sudah masuk tidak berhenti di sini: middleware tamu pada rute
+| login memantulkannya ke dashboard.
+*/
+Route::redirect('/', '/login')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    Route::resource('users', UserController::class);
-    Route::resource('roles', RoleController::class);
-    Route::resource('karyawans', KaryawanController::class);
-    Route::resource('jabatans', JabatanController::class);
-    Route::resource('clients', ClientController::class);
-    Route::resource('cashbons', CashbonController::class);
+    // Tak satu pun sumber daya di bawah punya halaman detail; tanpa except
+    // ini, /clients/1 dan sejenisnya menjawab 200 kosong alih-alih 404.
+    Route::resource('users', UserController::class)->except('show');
+    Route::resource('roles', RoleController::class)->except('show');
+    Route::resource('karyawans', KaryawanController::class)->except('show');
+    Route::resource('jabatans', JabatanController::class)->except('show');
+    Route::resource('clients', ClientController::class)->except('show');
+    Route::resource('cashbons', CashbonController::class)->except('show');
     Route::resource('kontraks', KontrakController::class);
-    
+
     // Penggajian - Global list
     Route::get('/penggajians', [PenggajianController::class, 'indexGlobal'])->name('penggajians.index');
-    
+
     // Penggajian - Nested under Kontraks
     Route::prefix('kontraks/{kontrak_id}/dokumens')->group(function () {
         Route::get('/', [KontrakDokumenController::class, 'index'])->name('kontraks.dokumens.index');
@@ -58,4 +65,4 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 });
 
-require __DIR__ . '/settings.php';
+require __DIR__.'/settings.php';

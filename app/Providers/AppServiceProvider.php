@@ -2,10 +2,7 @@
 
 namespace App\Providers;
 
-use App\Models\Cashbon;
-use App\Models\Penggajian;
-use App\Observers\CashbonObserver;
-use App\Observers\PenggajianObserver;
+use App\Support\JadwalGajian;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -15,7 +12,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // JadwalGajian menerima kebijakan pembagi prorata lewat konstruktor
+        // agar tetap murni dan bisa diuji tanpa konfigurasi aplikasi.
+        $this->app->bind(JadwalGajian::class, fn (): JadwalGajian => new JadwalGajian(
+            (bool) config('payroll.hari_per_bulan_kalender', true),
+            (int) config('payroll.hari_per_bulan_tetap', 30),
+        ));
     }
 
     /**
@@ -23,7 +25,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Cashbon::observe(CashbonObserver::class);
-        Penggajian::observe(PenggajianObserver::class);
+        //
     }
 }

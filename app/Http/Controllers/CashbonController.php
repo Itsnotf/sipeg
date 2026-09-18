@@ -6,14 +6,27 @@ use App\Http\Requests\Cashbon\StoreRequest;
 use App\Http\Requests\Cashbon\UpdateRequest;
 use App\Models\Cashbon;
 use App\Models\Karyawan;
+use App\Services\CashbonService;
+use App\Support\PesanKesalahan;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Inertia\Inertia;
+use Throwable;
 
+/**
+ * Seluruh perubahan cashbon dialirkan lewat CashbonService, yang menyusun ulang
+ * penggajian terdampak dalam transaksi yang sama. Controller hanya menerjemahkan
+ * kegagalan service menjadi pesan bagi pengguna.
+ */
 class CashbonController extends Controller implements HasMiddleware
 {
-    public static function middleware()
+    public function __construct(private CashbonService $cashbonService) {}
+
+    /**
+     * @return array<int, Middleware>
+     */
+    public static function middleware(): array
     {
         return [
             new Middleware('permission:cashbons index', only: ['index']),
@@ -23,54 +36,10 @@ class CashbonController extends Controller implements HasMiddleware
         ];
     }
 
-    private function normalizeAmount(mixed $value): int
-    {
-        if ($value === null) {
-            return 0;
-        }
-
-        $digits = preg_replace('/[^0-9]/', '', (string) $value);
-
-        return $digits === '' ? 0 : (int) $digits;
-    }
-
-    private function sumUnpaidCashbonJumlahForKaryawan(int $karyawanId): int
-    {
-        $jumlahValues = Cashbon::query()
-            ->where('karyawan_id', $karyawanId)
-            ->where('status', 'belum dibayar')
-            ->pluck('jumlah');
-
-        $total = 0;
-        foreach ($jumlahValues as $jumlah) {
-            $total += $this->normalizeAmount($jumlah);
-        }
-
-        return $total;
-    }
-
-    private function sumUnpaidCashbonJumlahForKaryawanExcluding(int $karyawanId, int $excludeCashbonId): int
-    {
-        $jumlahValues = Cashbon::query()
-            ->where('karyawan_id', $karyawanId)
-            ->where('status', 'belum dibayar')
-            ->where('id', '!=', $excludeCashbonId)
-            ->pluck('jumlah');
-
-        $total = 0;
-        foreach ($jumlahValues as $jumlah) {
-            $total += $this->normalizeAmount($jumlah);
-        }
-
-        return $total;
-    }
-
-    /**
-     * Display a listing of the resource.
-     */
     public function index(Request $request)
     {
         $cashbons = Cashbon::with('karyawan.jabatan')
+            ->withSum('potongans', 'jumlah')
             ->when($request->search, function ($query, $search) {
                 $query->where('keterangan', 'like', "%{$search}%")
                     ->orWhereHas('karyawan', function ($karyawanQuery) use ($search) {
@@ -82,136 +51,128 @@ class CashbonController extends Controller implements HasMiddleware
             ->paginate(8)
             ->withQueryString();
 
+        // Tiga angka yang berbeda maknanya, semuanya diturunkan dari buku besar:
+        //   terpotong — sudah dialokasikan ke suatu slip (termasuk yang belum dibayar)
+        //   terbayar  — benar-benar dipotong dari gaji yang sudah dibayarkan
+        //   sisa      — hutang yang masih ditanggung pekerja
+        $cashbons->getCollection()->transform(fn (Cashbon $cashbon): array => array_merge(
+            $cashbon->toArray(),
+            [
+                'terpotong' => $cashbon->terpotong(),
+                'terbayar' => $cashbon->terbayar(),
+                'sisa' => $cashbon->sisaHutang(),
+                // Tanggal pinjaman diformat di sini; created_at mentahnya
+                // sengaja tidak ikut terserialisasi.
+                'tanggal' => $cashbon->created_at?->format('Y-m-d'),
+            ]
+        ));
+
+        $semua = Cashbon::all();
+
         return inertia('cashbons/index', [
             'cashbons' => $cashbons,
-            'filters' => $request->only('search'),
-            'flash' => [
-                'success' => session('success'),
-                'error' => session('error'),
+            'ringkasan' => [
+                'total' => (float) $semua->sum(fn (Cashbon $cashbon): float => (float) $cashbon->jumlah),
+                'terbayar' => $semua->sum(fn (Cashbon $cashbon): float => $cashbon->terbayar()),
+                'sisa' => $semua->sum(fn (Cashbon $cashbon): float => $cashbon->sisaHutang()),
+                'jumlah_pinjaman' => $semua->count(),
+                'berjalan' => $semua->filter(fn (Cashbon $cashbon): bool => $cashbon->sisaHutang() >= 1)->count(),
             ],
+            'filters' => $request->only('search'),
         ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
-        $karyawans = Karyawan::with('jabatan')->get();
-
         return Inertia::render('cashbons/create', [
-            'karyawans' => $karyawans,
+            'karyawans' => $this->karyawanDenganPlafon(),
+            'kebijakan' => $this->kebijakan(),
         ]);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(StoreRequest $request)
     {
-        $validated = $request->validated();
+        try {
+            $this->cashbonService->buat($request->validated());
 
-        $validated['status'] = $validated['status'] ?? 'belum dibayar';
-
-        $karyawan = Karyawan::with('jabatan')->findOrFail($validated['karyawan_id']);
-        $gaji = $this->normalizeAmount($karyawan->jabatan?->gaji);
-        $limit = (int) floor($gaji * 0.5);
-
-        $jumlahBaru = $this->normalizeAmount($validated['jumlah']);
-        $totalSebelumnya = $this->sumUnpaidCashbonJumlahForKaryawan((int) $karyawan->id);
-        $jumlahBaruTerhitung = $validated['status'] === 'belum dibayar' ? $jumlahBaru : 0;
-        $totalSesudahnya = $totalSebelumnya + $jumlahBaruTerhitung;
-
-        if ($limit <= 0) {
-            return redirect()->back()->with('error', 'Cashbon tidak dapat dibuat karena gaji karyawan belum tersedia.');
+            return redirect()->route('cashbons.index')->with('success', 'Cashbon berhasil dibuat.');
+        } catch (Throwable $e) {
+            return redirect()->back()->withInput()->with('error', PesanKesalahan::untukPengguna($e, 'Cashbon gagal disimpan.'));
         }
-
-        if ($totalSesudahnya > $limit) {
-            return redirect()->back()->with('error', 'Cashbon tidak dapat dibuat karena sudah lebih dari limit 50% gaji.');
-        }
-
-        $validated['jumlah'] = (string) $jumlahBaru;
-
-        Cashbon::create($validated);
-
-        return redirect()->route('cashbons.index')->with('success', 'Cashbon created successfully.');
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(Cashbon $cashbon)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function edit(string $id)
     {
-        $cashbon = Cashbon::with('karyawan.jabatan')->findOrFail($id);
-        $karyawans = Karyawan::with('jabatan')->get();
-
         return Inertia::render('cashbons/edit', [
-            'cashbon' => $cashbon,
-            'karyawans' => $karyawans,
+            'cashbon' => Cashbon::with('karyawan.jabatan')->findOrFail($id),
+            'karyawans' => $this->karyawanDenganPlafon(),
+            'kebijakan' => $this->kebijakan(),
         ]);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(UpdateRequest $request, string $id)
     {
-        $cashbon = Cashbon::findOrFail($id);
+        try {
+            $this->cashbonService->ubah(Cashbon::findOrFail($id), $request->validated());
 
-        if ($cashbon->created_at && $cashbon->created_at->lt(now()->subDay())) {
-            return redirect()->back()->with('error', 'Cashbon tidak dapat diupdate karena sudah lebih dari 1 hari.');
+            return redirect()->route('cashbons.index')->with('success', 'Cashbon berhasil diperbarui.');
+        } catch (Throwable $e) {
+            return redirect()->back()->withInput()->with('error', PesanKesalahan::untukPengguna($e, 'Cashbon gagal disimpan.'));
         }
+    }
 
-        $validated = $request->validated();
+    public function destroy(string $id)
+    {
+        try {
+            $this->cashbonService->hapus(Cashbon::findOrFail($id));
 
-        $validated['status'] = $validated['status'] ?? $cashbon->status ?? 'belum dibayar';
-
-        $jumlahBaru = $this->normalizeAmount($validated['jumlah']);
-        $validated['jumlah'] = (string) $jumlahBaru;
-
-        $karyawanIdBaru = (int) $validated['karyawan_id'];
-        $karyawan = Karyawan::with('jabatan')->findOrFail($karyawanIdBaru);
-        $gaji = $this->normalizeAmount($karyawan->jabatan?->gaji);
-        $limit = (int) floor($gaji * 0.5);
-
-        $totalSebelumnya = $this->sumUnpaidCashbonJumlahForKaryawanExcluding($karyawanIdBaru, (int) $cashbon->id);
-        $jumlahBaruTerhitung = $validated['status'] === 'belum dibayar' ? $jumlahBaru : 0;
-        $totalSesudahnya = $totalSebelumnya + $jumlahBaruTerhitung;
-
-        if ($limit <= 0) {
-            return redirect()->back()->with('error', 'Cashbon tidak dapat diupdate karena gaji karyawan belum tersedia.');
+            return redirect()->route('cashbons.index')->with('success', 'Cashbon berhasil dihapus.');
+        } catch (Throwable $e) {
+            return redirect()->back()->with('error', PesanKesalahan::untukPengguna($e, 'Cashbon gagal disimpan.'));
         }
-
-        if ($totalSesudahnya > $limit) {
-            return redirect()->back()->with('error', 'Cashbon tidak dapat diupdate karena sudah lebih dari limit 50% gaji.');
-        }
-
-        $cashbon->update($validated);
-
-        return redirect()->route('cashbons.index')->with('success', 'Cashbon updated successfully.');
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Daftar pekerja lengkap dengan plafon dan sisa ruang pinjamannya, agar
+     * formulir dapat memberi tahu batasnya sebelum pengguna menekan simpan.
+     *
+     * @return array<int, array<string, mixed>>
      */
-    public function destroy(string $id)
+    private function karyawanDenganPlafon(): array
     {
-        $cashbon = Cashbon::findOrFail($id);
+        return Karyawan::with('jabatan')->get()->map(function (Karyawan $karyawan): array {
+            $plafon = $this->cashbonService->plafonPinjaman($karyawan);
+            $berjalan = $this->cashbonService->hutangBerjalan($karyawan);
+            $bersih = $this->cashbonService->gajiBersihBulanan($karyawan);
 
-        if ($cashbon->created_at && $cashbon->created_at->lt(now()->subDay())) {
-            return redirect()->back()->with('error', 'Cashbon tidak dapat dihapus karena sudah lebih dari 1 hari.');
-        }
+            return [
+                'id' => $karyawan->id,
+                'nama' => $karyawan->nama,
+                'nik' => $karyawan->nik,
+                'jabatan' => [
+                    'nama_jabatan' => $karyawan->jabatan?->nama_jabatan ?? '-',
+                    'gaji' => (float) ($karyawan->jabatan?->gaji ?? 0),
+                ],
+                'gaji_bersih' => $bersih,
+                'potongan_maksimal' => round($bersih * (float) config('payroll.batas_potongan', 0.5)),
+                'plafon' => $plafon,
+                'hutang_berjalan' => $berjalan,
+                'sisa_plafon' => max(0, $plafon - $berjalan),
+            ];
+        })->all();
+    }
 
-        $cashbon->delete();
-
-        return redirect()->route('cashbons.index')->with('success', 'Cashbon deleted successfully.');
+    /**
+     * Angka kebijakan yang dipakai formulir untuk menjelaskan batasnya kepada
+     * pengguna sebelum mereka mengetik, bukan menolaknya setelah menekan simpan.
+     *
+     * @return array<string, float|int>
+     */
+    private function kebijakan(): array
+    {
+        return [
+            'maks_hutang_bulan' => (float) config('payroll.maks_hutang_bulan', 3),
+            'batas_potongan' => (float) config('payroll.batas_potongan', 0.5),
+        ];
     }
 }

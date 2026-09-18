@@ -23,8 +23,8 @@ class UpdateUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-            "name" => "required|string|max:255",
-            "email" => [
+            'name' => 'required|string|max:255',
+            'email' => [
                 'required',
                 'string',
                 'email',
@@ -32,8 +32,11 @@ class UpdateUserRequest extends FormRequest
                 // allow the current user to keep their email
                 Rule::unique('users')->ignore($this->route('user')),
             ],
-            "password" => "required|string|min:8|confirmed",
-            "role" => "required|string|exists:roles,name",
+            // Opsional saat mengubah: formulir menyatakan "kosongkan untuk
+            // mempertahankan kata sandi lama", sementara aturannya dulu tetap
+            // required sehingga menyimpan tanpa mengganti sandi selalu ditolak.
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'role' => 'required|string|exists:roles,name',
         ];
     }
 }

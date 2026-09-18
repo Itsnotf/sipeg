@@ -1,4 +1,5 @@
 import PasswordController from '@/actions/App/Http/Controllers/Settings/PasswordController';
+import PasswordInput from '@/components/form/password-input';
 import InputError from '@/components/input-error';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
@@ -9,7 +10,6 @@ import { useRef } from 'react';
 
 import HeadingSmall from '@/components/heading-small';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/user-password';
 
@@ -64,11 +64,10 @@ export default function Password() {
                                         Current password
                                     </Label>
 
-                                    <Input
+                                    <PasswordInput
                                         id="current_password"
                                         ref={currentPasswordInput}
                                         name="current_password"
-                                        type="password"
                                         className="mt-1 block w-full"
                                         autoComplete="current-password"
                                         placeholder="Current password"
@@ -84,11 +83,10 @@ export default function Password() {
                                         New password
                                     </Label>
 
-                                    <Input
+                                    <PasswordInput
                                         id="password"
                                         ref={passwordInput}
                                         name="password"
-                                        type="password"
                                         className="mt-1 block w-full"
                                         autoComplete="new-password"
                                         placeholder="New password"
@@ -102,10 +100,9 @@ export default function Password() {
                                         Confirm password
                                     </Label>
 
-                                    <Input
+                                    <PasswordInput
                                         id="password_confirmation"
                                         name="password_confirmation"
-                                        type="password"
                                         className="mt-1 block w-full"
                                         autoComplete="new-password"
                                         placeholder="Confirm password"

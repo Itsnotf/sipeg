@@ -1,106 +1,66 @@
-import { Button } from '@/components/ui/button';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, Form } from '@inertiajs/react';
-import { Input } from '@/components/ui/input';
-import { BreadcrumbItem, Permission, Role } from '@/types';
-import InputError from '@/components/input-error';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Card } from '@/components/ui/card';
+import { Form, Head } from '@inertiajs/react';
 
+import Field from '@/components/form/field';
+import FormActions from '@/components/form/form-actions';
+import PermissionPicker, { type IzinRingkas } from '@/components/form/permission-picker';
+import PageHeader from '@/components/page-header';
+import { Input } from '@/components/ui/input';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import roles, { update } from '@/routes/roles';
+import type { BreadcrumbItem } from '@/types';
 
 interface Props {
-    role: Role;
-    permissions: Permission[];
+    role: { id: number; name: string; permissions: string[] };
+    permissions: IzinRingkas[];
 }
 
-export default function RoleEditPage({ role, permissions }: Props) {
+export default function RoleEdit({ role, permissions }: Props) {
+    useFlashToast();
+
     const breadcrumbs: BreadcrumbItem[] = [
-        {
-            title: 'Roles',
-            href: '/roles',
-        },
-        {
-            title: 'Edit',
-            href: `/roles/${role.id}/edit`,
-        },
+        { title: 'Role', href: roles.index().url },
+        { title: role.name, href: roles.edit(role.id).url },
     ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Edit Role" />
-            <Card className='m-4'>
-                <Form
-                    method="put"
-                    action={`/roles/${role.id}`}
-                    className="flex flex-col gap-6 p-4"
-                >
+            <Head title={`Ubah ${role.name}`} />
+
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Ubah role"
+                    description="Perubahan izin berlaku pada kunjungan halaman berikutnya bagi pengguna yang memakai role ini"
+                />
+
+                <Form {...update.form(role.id)} disableWhileProcessing className="flex flex-col gap-5">
                     {({ processing, errors }) => (
                         <>
-                            <div className="grid gap-6">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="name">Role Name</Label>
-                                    <Input
-                                        id="name"
-                                        type="text"
-                                        required
-                                        name="name"
-                                        defaultValue={role.name}
-                                        placeholder="Enter role name"
-                                    />
-                                    <InputError message={errors.name} />
-                                </div>
+                            <Field id="name" label="Nama role" error={errors.name} className="max-w-xl">
+                                <Input
+                                    id="name"
+                                    name="name"
+                                    required
+                                    autoFocus
+                                    autoComplete="off"
+                                    defaultValue={role.name}
+                                    className="h-12 sm:h-9"
+                                />
+                            </Field>
 
-                                <div className="grid gap-2">
-                                    <Label>Permissions</Label>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {permissions.map((permission) => (
-                                            <label
-                                                key={permission.id}
-                                                className="flex items-center space-x-3"
-                                            >
-                                                <Checkbox
-                                                    name="permissions[]"
-                                                    value={permission.name}
-                                                    defaultChecked={role.permissions?.some(
-                                                        (p) => p.id === permission.id
-                                                    )}
-                                                />
-                                                <span>{permission.name}</span>
+                            <Field id="permissions" label="Izin" error={errors.permissions} opsional>
+                                <PermissionPicker permissions={permissions} terpilihAwal={role.permissions} />
+                            </Field>
 
-                                            </label>
-                                        ))}
-                                    </div>
-                                    <InputError message={errors.permissions} />
-                                </div>
-
-                                <div className="space-x-2">
-                                    <Button type="submit" className="mt-2 w-fit">
-                                        {processing ? (
-                                            <>
-                                                <Spinner className="mr-2" />
-                                                Saving...
-                                            </>
-                                        ) : (
-                                            'Save changes'
-                                        )}
-                                    </Button>
-                                    <Link href="/roles">
-                                        <Button
-                                            variant="outline"
-                                            type="button"
-                                            className="mt-2 w-fit"
-                                        >
-                                            Back
-                                        </Button>
-                                    </Link>
-                                </div>
-                            </div>
+                            <FormActions
+                                processing={processing}
+                                simpan="Simpan perubahan"
+                                batalKe={roles.index().url}
+                            />
                         </>
                     )}
                 </Form>
-            </Card>
+            </div>
         </AppLayout>
     );
 }

@@ -1,193 +1,201 @@
-import { Button } from '@/components/ui/button';
-import AppLayout from '@/layouts/app-layout';
-import { Link, Head, router, Form } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
+import { useState } from 'react';
+
+import Field from '@/components/form/field';
+import FormActions from '@/components/form/form-actions';
+import PageHeader from '@/components/page-header';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useFlashToast } from '@/hooks/use-flash-toast';
+import AppLayout from '@/layouts/app-layout';
+import { rupiah } from '@/lib/utils';
 import kontraks, { store } from '@/routes/kontraks';
-import { BreadcrumbItem, Client } from '@/types';
+import type { BreadcrumbItem, Client } from '@/types';
 
-import InputError from '@/components/input-error';
-import TextLink from '@/components/text-link';
-
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-
+interface Opsi {
+    value: string;
+    label: string;
+}
 
 interface Props {
     clients: Client[];
+    opsi: { status: Opsi[] };
 }
 
-
 const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Kontraks',
-        href: kontraks.index().url,
-    },
-    {
-        title: 'Create',
-        href: kontraks.create().url,
-    },
+    { title: 'Kontrak', href: kontraks.index().url },
+    { title: 'Tambah', href: kontraks.create().url },
 ];
 
-export default function KontrakCreatePage({ clients }: Props) {
+export default function KontrakCreate({ clients, opsi }: Props) {
+    useFlashToast();
 
+    const [client, setClient] = useState('');
+    const [status, setStatus] = useState('Pending');
+    const [mulai, setMulai] = useState('');
+    const [selesai, setSelesai] = useState('');
+    const [biaya, setBiaya] = useState('');
+    const [hariGajian, setHariGajian] = useState('25');
+
+    // Aturan yang sama ada di server (`after:tanggal_mulai`); di sini hanya agar
+    // keliru urutan terlihat sebelum formulir dikirim, bukan sesudahnya.
+    const urutanSalah = Boolean(mulai && selesai && selesai <= mulai);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Kontrak Create" />
-            <Form
-                {...store.form()}
-                disableWhileProcessing
-                className="flex flex-col gap-6 p-4"
-            >
-                {({ processing, errors }) => (
-                    <>
-                        <div className="grid gap-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="client_id">Client</Label>
-                                <Select name="client_id" required>
-                                    <SelectTrigger>
+            <Head title="Tambah kontrak" />
+
+            <div className="flex flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Tambah kontrak"
+                    description="Periode dan tanggal gajian di sini menentukan kapan penggajian boleh dibuat dan untuk bulan apa saja"
+                />
+
+                <Form {...store.form()} disableWhileProcessing className="flex max-w-xl flex-col gap-5">
+                    {({ processing, errors }) => (
+                        <>
+                            <input type="hidden" name="client_id" value={client} />
+                            <input type="hidden" name="status" value={status} />
+
+                            <Field id="client_id" label="Client" error={errors.client_id}>
+                                <Select value={client} onValueChange={setClient}>
+                                    <SelectTrigger id="client_id" className="h-12 sm:h-9">
                                         <SelectValue placeholder="Pilih client" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {clients.map((client) => (
-                                            <SelectItem key={client.id} value={client.id.toString()}>
-                                                {client.nama_client}
+                                        {clients.map((c) => (
+                                            <SelectItem key={c.id} value={String(c.id)}>
+                                                {c.nama_client}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <InputError
-                                    message={errors.client_id}
-                                    className="mt-2"
-                                />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="judul">Judul</Label>
+                            <Field id="judul" label="Judul kontrak" error={errors.judul}>
                                 <Input
                                     id="judul"
-                                    type="text"
+                                    name="judul"
                                     required
                                     autoFocus
-                                    tabIndex={1}
-                                    autoComplete="judul"
-                                    name="judul"
-                                    placeholder="Judul Kontrak"
+                                    placeholder="Penyediaan tenaga kebersihan 2026"
+                                    className="h-12 sm:h-9"
                                 />
-                                <InputError message={errors.judul} />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="deskripsi">Deskripsi</Label>
+                            <Field id="deskripsi" label="Deskripsi" error={errors.deskripsi}>
                                 <Input
                                     id="deskripsi"
-                                    type="text"
-                                    required
-                                    tabIndex={2}
-                                    autoComplete="deskripsi"
                                     name="deskripsi"
-                                    placeholder="Deskripsi Kontrak"
-                                />
-                                <InputError message={errors.deskripsi} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="tanggal_mulai">Tanggal Mulai</Label>
-                                <Input
-                                    id="tanggal_mulai"
-                                    type="date"
                                     required
-                                    tabIndex={3}
-                                    name="tanggal_mulai"
+                                    placeholder="Ruang lingkup dan lokasi kerja"
+                                    className="h-12 sm:h-9"
                                 />
-                                <InputError message={errors.tanggal_mulai} />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="tanggal_selesai">Tanggal Selesai</Label>
-                                <Input
+                            <div className="grid gap-5 sm:grid-cols-2">
+                                <Field id="tanggal_mulai" label="Tanggal mulai" error={errors.tanggal_mulai}>
+                                    <Input
+                                        id="tanggal_mulai"
+                                        name="tanggal_mulai"
+                                        type="date"
+                                        required
+                                        value={mulai}
+                                        onChange={(e) => setMulai(e.target.value)}
+                                        className="num h-12 sm:h-9"
+                                    />
+                                </Field>
+
+                                <Field
                                     id="tanggal_selesai"
-                                    type="date"
-                                    required
-                                    tabIndex={4}
-                                    name="tanggal_selesai"
-                                />
-                                <InputError message={errors.tanggal_selesai} />
+                                    label="Tanggal selesai"
+                                    error={
+                                        errors.tanggal_selesai ??
+                                        (urutanSalah ? 'Tanggal selesai harus setelah tanggal mulai.' : undefined)
+                                    }
+                                >
+                                    <Input
+                                        id="tanggal_selesai"
+                                        name="tanggal_selesai"
+                                        type="date"
+                                        required
+                                        min={mulai || undefined}
+                                        value={selesai}
+                                        onChange={(e) => setSelesai(e.target.value)}
+                                        className="num h-12 sm:h-9"
+                                    />
+                                </Field>
                             </div>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="tanggal_gajian">Tanggal Gajian (Hari dalam Sebulan)</Label>
+                            <Field
+                                id="tanggal_gajian"
+                                label="Tanggal gajian"
+                                error={errors.tanggal_gajian}
+                                hint={`Tanggal ${hariGajian || '—'} tiap bulan. Bila bulannya lebih pendek, gajian jatuh pada hari terakhir bulan itu.`}
+                            >
                                 <Input
                                     id="tanggal_gajian"
+                                    name="tanggal_gajian"
                                     type="number"
-                                    required
+                                    inputMode="numeric"
                                     min="1"
                                     max="31"
-                                    tabIndex={4}
-                                    name="tanggal_gajian"
-                                    placeholder="Masukkan hari (1-31)"
+                                    required
+                                    value={hariGajian}
+                                    onChange={(e) => setHariGajian(e.target.value)}
+                                    className="num h-12 sm:h-9"
                                 />
-                                <InputError message={errors.tanggal_gajian} />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="status">Status</Label>
-                                <Select name="status" required>
-                                    <SelectTrigger>
+                            <Field
+                                id="status"
+                                label="Status"
+                                error={errors.status}
+                                hint="Hanya kontrak berstatus Progres yang penggajiannya dapat diproses."
+                            >
+                                <Select value={status} onValueChange={setStatus}>
+                                    <SelectTrigger id="status" className="h-12 sm:h-9">
                                         <SelectValue placeholder="Pilih status" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="Pending">Pending</SelectItem>
-                                        <SelectItem value="Progres">Progres</SelectItem>
-                                        <SelectItem value="Selesai">Selesai</SelectItem>
+                                        {opsi.status.map((o) => (
+                                            <SelectItem key={o.value} value={o.value}>
+                                                {o.label}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
-                                <InputError message={errors.status} />
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="total_biaya">Total Biaya</Label>
+                            <Field
+                                id="total_biaya"
+                                label="Nilai kontrak"
+                                error={errors.total_biaya}
+                                hint={biaya ? rupiah(biaya) : 'Nilai yang ditagihkan ke client selama kontrak berjalan'}
+                            >
                                 <Input
                                     id="total_biaya"
-                                    type="number"
-                                    required
-                                    tabIndex={5}
-                                    autoComplete="total_biaya"
                                     name="total_biaya"
-                                    placeholder="Total Biaya"
-                                    step="0.01"
+                                    type="number"
+                                    inputMode="numeric"
+                                    min="0"
+                                    step="1000"
+                                    required
+                                    value={biaya}
+                                    onChange={(e) => setBiaya(e.target.value)}
+                                    className="num h-12 sm:h-9"
                                 />
-                                <InputError message={errors.total_biaya} />
-                            </div>
+                            </Field>
 
-                            <div className='space-x-2'>
-                                <Button type="submit" className="mt-2 w-fit">
-                                    {processing ? (
-                                        <>
-                                            <Spinner className="mr-2" />
-                                            Creating...
-                                        </>
-                                    ) : (
-                                        'Create Kontrak'
-                                    )}
-                                </Button>
-                                <Link href={'/kontraks'}>
-                                    <Button variant='outline' type="button" className="mt-2 w-fit">
-                                        Back
-                                    </Button>
-                                </Link>
-                            </div>
-                        </div>
-                    </>
-                )}
-            </Form>
+                            <FormActions
+                                processing={processing}
+                                simpan="Simpan kontrak"
+                                batalKe={kontraks.index().url}
+                            />
+                        </>
+                    )}
+                </Form>
+            </div>
         </AppLayout>
     );
 }
